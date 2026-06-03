@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file profile email'
 
 // sessionStorage: token survives refreshes in same tab, gone when browser closes
 // localStorage: profile survives across browser restarts (no token, just name/email/picture)
