@@ -23,6 +23,34 @@ function clearSession() {
   localStorage.removeItem('et_user')
 }
 
+// Fetches profile from Google and converts picture to a base64 data URL so it
+// works in PWA standalone mode without needing Google auth cookies.
+async function fetchUserProfile(token) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+
+  let picture = null
+  if (data.picture) {
+    try {
+      const picRes = await fetch(data.picture)
+      const blob = await picRes.blob()
+      picture = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      picture = data.picture // fall back to URL if blob conversion fails
+    }
+  }
+
+  return { name: data.name || '', email: data.email || '', picture }
+}
+
 export function useAuth() {
   const [user, setUser] = useState(null)
   const [accessToken, setAccessToken] = useState(null)
@@ -35,6 +63,11 @@ export function useAuth() {
       setUser(savedUser)
       setAccessToken(token)
       setLoading(false)
+      // Refresh profile in background so picture/name stay fresh
+      fetchUserProfile(token).then(userObj => {
+        saveSession(userObj, token)
+        setUser(userObj)
+      }).catch(() => {})
       return
     }
 
@@ -54,16 +87,12 @@ export function useAuth() {
       callback: async (response) => {
         if (response.error) return
         try {
-          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${response.access_token}` },
-          })
-          const data = await res.json()
-          const userObj = { name: data.name, email: data.email, picture: data.picture ?? null }
+          const userObj = await fetchUserProfile(response.access_token)
           saveSession(userObj, response.access_token)
           setUser(userObj)
           setAccessToken(response.access_token)
         } catch {
-          setUser({ name: 'User', email: '', picture: null })
+          setUser({ name: '', email: '', picture: null })
           setAccessToken(response.access_token)
         }
       },
