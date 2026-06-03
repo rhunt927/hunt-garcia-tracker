@@ -9,6 +9,8 @@ function loadSession() {
   try {
     const token = sessionStorage.getItem('et_token')
     const user = JSON.parse(localStorage.getItem('et_user') || 'null')
+    // Drop any previously stored invalid base64 picture
+    if (user?.picture?.startsWith('data:')) user.picture = null
     return { token, user }
   } catch { return { token: null, user: null } }
 }
@@ -23,32 +25,13 @@ function clearSession() {
   localStorage.removeItem('et_user')
 }
 
-// Fetches profile from Google and converts picture to a base64 data URL so it
-// works in PWA standalone mode without needing Google auth cookies.
 async function fetchUserProfile(token) {
   const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${token}` },
   })
   const data = await res.json()
   if (data.error) throw new Error(data.error)
-
-  let picture = null
-  if (data.picture) {
-    try {
-      const picRes = await fetch(data.picture)
-      const blob = await picRes.blob()
-      picture = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(blob)
-      })
-    } catch {
-      picture = data.picture // fall back to URL if blob conversion fails
-    }
-  }
-
-  return { name: data.name || '', email: data.email || '', picture }
+  return { name: data.name || '', email: data.email || '', picture: data.picture || null }
 }
 
 export function useAuth() {

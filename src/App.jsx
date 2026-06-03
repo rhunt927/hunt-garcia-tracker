@@ -374,7 +374,9 @@ function Avatar({ user, size = 8 }) {
   const [imgFailed, setImgFailed] = useState(false)
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
-    : '?'
+    : user?.email
+      ? user.email[0].toUpperCase()
+      : '?'
 
   if (user?.picture && !imgFailed) {
     return (
