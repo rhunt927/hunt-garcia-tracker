@@ -232,15 +232,19 @@ function TransactionTypeList({ types, onAdd, onRename, onDelete, onToggleIncome 
           placeholder="New type"
           className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
         />
-        <label className="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap cursor-pointer">
-          <input
-            type="checkbox"
-            checked={newIsIncome}
-            onChange={e => setNewIsIncome(e.target.checked)}
-            className="accent-green-500"
-          />
-          Income
-        </label>
+        <button
+          type="button"
+          onClick={() => setNewIsIncome(v => !v)}
+          className={`flex items-center gap-1 text-xs cursor-pointer shrink-0 whitespace-nowrap ${newIsIncome ? 'text-green-400' : 'text-red-400'}`}
+        >
+          <span className={`inline-flex w-4 h-4 rounded border-2 items-center justify-center shrink-0 ${newIsIncome ? 'bg-green-500 border-green-500' : 'bg-red-500/20 border-red-500'}`}>
+            {newIsIncome
+              ? <Check size={9} className="text-white" strokeWidth={3} />
+              : <X size={9} className="text-red-400" strokeWidth={3} />
+            }
+          </span>
+          {newIsIncome ? 'Income' : 'Expense'}
+        </button>
         <button
           onClick={handleAdd}
           disabled={!newName.trim()}
@@ -282,17 +286,20 @@ function TransactionTypeRow({ type, onRename, onDelete, onToggleIncome }) {
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5">
       <span className="flex-1 text-sm text-gray-300">{type.name}</span>
-      <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0" title="Toggle income/expense">
-        <input
-          type="checkbox"
-          checked={!!type.is_income}
-          onChange={onToggleIncome}
-          className="accent-green-500"
-        />
-        <span className={type.is_income ? 'text-green-400' : 'text-gray-500'}>
-          {type.is_income ? 'Income' : 'Expense'}
+      <button
+        type="button"
+        onClick={onToggleIncome}
+        className={`flex items-center gap-1 text-xs cursor-pointer shrink-0 ${type.is_income ? 'text-green-400' : 'text-red-400'}`}
+        title="Toggle income/expense"
+      >
+        <span className={`inline-flex w-4 h-4 rounded border-2 items-center justify-center shrink-0 ${type.is_income ? 'bg-green-500 border-green-500' : 'bg-red-500/20 border-red-500'}`}>
+          {type.is_income
+            ? <Check size={9} className="text-white" strokeWidth={3} />
+            : <X size={9} className="text-red-400" strokeWidth={3} />
+          }
         </span>
-      </label>
+        {type.is_income ? 'Income' : 'Expense'}
+      </button>
       <button onClick={() => { setVal(type.name); setEditing(true) }} className="text-gray-500 hover:text-white transition-colors">
         <Pencil size={13} />
       </button>
