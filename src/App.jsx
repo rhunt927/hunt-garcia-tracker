@@ -169,7 +169,7 @@ export default function App() {
   return (
     <div
       className="min-h-screen text-white relative"
-      style={{ backgroundImage: "url('/panama.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+      style={{ backgroundImage: `url('${import.meta.env.BASE_URL}panama.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center' }}
     >
       <div className="absolute inset-0 bg-black/70" />
 
