@@ -72,7 +72,7 @@ export function useAuth() {
   }, [])
 
   function logout() {
-    if (accessToken) window.google.accounts.oauth2.revoke(accessToken)
+    window.google?.accounts?.oauth2?.revoke(accessToken)
     clearSession()
     setUser(null)
     setAccessToken(null)
