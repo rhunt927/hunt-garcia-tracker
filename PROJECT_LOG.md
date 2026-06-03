@@ -57,44 +57,61 @@ A Progressive Web App (PWA) expense tracker that:
 
 ---
 
+## Session 2 — June 3, 2026
+
+### Completed
+
+#### Phase 3: Expense Entry & List ✅
+- [x] `ExpenseForm.jsx` — date, merchant, amount, currency, category, payment method, description, notes, transaction type
+- [x] `ExpenseList.jsx` — scrollable list, search, filter by type/category, bulk select/delete
+- [x] Edit and delete (single + bulk)
+- [x] Income/expense color coding (green/red)
+
+#### Phase 4: Camera & OCR ✅
+- [x] `ReceiptScanner.jsx` — camera on mobile, file picker on desktop
+- [x] Google Cloud Vision API extracts merchant/date/amount
+- [x] Pre-fills ExpenseForm with OCR results
+
+#### Phase 5: CSV Import ✅
+- [x] `CSVImport.jsx` — drag-and-drop or file picker
+- [x] Auto-detects Apple Card, Chase, Schwab, Discover, BofA formats
+- [x] Preview table with per-row category assignment before import
+- [x] Duplicate detection
+
+#### Phase 6: Reports ✅
+- [x] Pie chart (default) and bar chart toggle
+- [x] Date range filter (defaults to current month)
+- [x] Income / Expenses / Net summary strip
+- [x] Category breakdown table
+- [x] CSV export of filtered transactions
+
+#### Additional Features Built
+- [x] `SettingsSidebar.jsx` — slide-in left panel, resizable
+  - Categories, Payment Methods, Transaction Types (with income/expense toggle), Exchange Rates
+  - Add / rename / delete all items; changes update DB immediately
+- [x] Dashboard home screen — Total Income, Total Expenses, Net + 4 action buttons
+- [x] Transaction Types — custom types with income/expense flag; default: Expense, Income, Transfer, Reimbursement
+- [x] DB migration — all stored names updated to human-readable display format
+- [x] Persistent auth — sessionStorage for token (survives refresh), localStorage for profile
+- [x] Profile photo via Google identity; initials fallback
+
+#### Phase 8: Deploy (In Progress)
+- [x] GitHub Actions workflow created (`.github/workflows/deploy.yml`)
+- [x] `vite.config.js` base set to `/expense-tracker/`
+- [ ] Add GitHub Secrets: `VITE_GOOGLE_CLIENT_ID`, `VITE_VISION_API_KEY`
+- [ ] Enable GitHub Pages in repo settings (Source: GitHub Actions)
+- [ ] Final smoke test on iPhone Safari and iPad Air
+
+---
+
 ## TODO — Next Session
 
-### Phase 3: Expense Entry & List ← START HERE
+### Phase 7: PWA Polish ← START HERE
 
-- [ ] `ExpenseForm.jsx` — all fields (date, merchant, amount, currency, category, payment method, notes)
-- [ ] `ExpenseList.jsx` — scrollable list, sort by date, filter, keyword search
-- [ ] Edit and delete expense
-
-### Phase 4: Camera & OCR
-
-- [ ] `CameraCapture.jsx` — camera on mobile, file picker fallback on desktop
-- [ ] Call Cloud Vision API, extract merchant/date/amount
-- [ ] Pre-fill ExpenseForm with OCR results
-
-### Phase 5: CSV Import
-
-- [ ] `CSVImport.jsx` — drag-and-drop or file picker
-- [ ] Auto-detect Chase, Schwab, Discover, Bank of America, generic formats
-- [ ] Preview table with category assignment before import
-- [ ] Duplicate detection
-
-### Phase 6: Reports
-
-- [ ] Monthly bar chart by category (Recharts)
-- [ ] Date range filter with totals
-- [ ] CSV export of filtered results
-
-### Phase 7: PWA Polish
-
-- [ ] Configure vite-plugin-pwa (manifest, icons, service worker)
-- [ ] Offline read mode + queue writes
+- [ ] Add PWA icons (192px and 512px) to `public/icons/`
 - [ ] Test "Add to Home Screen" on iPhone Safari and iPad Air
+- [ ] Offline read mode
 - [ ] Lighthouse PWA audit
-
-### Phase 8: Deploy
-
-- [ ] Deploy to GitHub Pages
-- [ ] Final smoke test on iPhone Safari and iPad Air
 
 ---
 
