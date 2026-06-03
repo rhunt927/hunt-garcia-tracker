@@ -10,7 +10,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
   transactionTypes, user, onLogout,
   onAddCategory, onRenameCategory, onDeleteCategory,
   onAddPaymentMethod, onRenamePaymentMethod, onDeletePaymentMethod,
-  onUpdateExchangeRate,
+  onUpdateExchangeRate, onDeleteExchangeRate,
   onAddTransactionType, onRenameTransactionType, onDeleteTransactionType, onToggleTransactionTypeIncome,
 }) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
@@ -85,7 +85,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
           </Section>
 
           <Section title="Transaction Types">
-            <p className="text-xs text-gray-500 mb-2">Check "Income" for types that represent money coming in.</p>
+            <p className="text-xs text-gray-500 mb-2">Click the toggle to switch a type between Expense (red) and Income (green).</p>
             <TransactionTypeList
               types={transactionTypes}
               onAdd={onAddTransactionType}
@@ -96,8 +96,8 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
           </Section>
 
           <Section title="Exchange Rates">
-            <p className="text-xs text-gray-500 mb-2">USD base. Set rate per foreign currency unit.</p>
-            <ExchangeRateList rates={exchangeRates} onUpdate={onUpdateExchangeRate} />
+            <p className="text-xs text-gray-500 mb-2">USD base. Enter how many USD = 1 unit of the currency.</p>
+            <ExchangeRateList rates={exchangeRates} onUpdate={onUpdateExchangeRate} onDelete={onDeleteExchangeRate} />
           </Section>
 
         </div>
@@ -105,7 +105,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
         {/* User + sign out */}
         <div className="px-5 py-4 border-t border-white/10 flex items-center gap-3">
           <SidebarAvatar user={user} />
-          <span className="flex-1 text-sm text-gray-300 truncate">{user?.name}</span>
+          <span className="flex-1 text-sm text-gray-300 truncate">{user?.name || user?.email || 'User'}</span>
           <button
             onClick={onLogout}
             className="text-sm text-gray-500 hover:text-red-400 transition-colors whitespace-nowrap"
@@ -310,17 +310,56 @@ function TransactionTypeRow({ type, onRename, onDelete, onToggleIncome }) {
   )
 }
 
-function ExchangeRateList({ rates, onUpdate }) {
+function ExchangeRateList({ rates, onUpdate, onDelete }) {
+  const [newCurrency, setNewCurrency] = useState('')
+  const [newRate, setNewRate] = useState('')
+
+  function handleAdd() {
+    const currency = newCurrency.trim().toUpperCase()
+    const rate = parseFloat(newRate)
+    if (!currency || isNaN(rate) || rate <= 0) return
+    onUpdate(currency, rate)
+    setNewCurrency('')
+    setNewRate('')
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {Object.entries(rates).map(([currency, rate]) => (
-        <ExchangeRateRow key={currency} currency={currency} rate={rate} onUpdate={onUpdate} />
+        <ExchangeRateRow key={currency} currency={currency} rate={rate} onUpdate={onUpdate} onDelete={() => onDelete(currency)} />
       ))}
+      <div className="flex gap-2 mt-2 pt-2 border-t border-white/5 items-center">
+        <input
+          value={newCurrency}
+          onChange={e => setNewCurrency(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="COP"
+          maxLength={5}
+          className="w-16 bg-gray-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 font-mono"
+        />
+        <input
+          value={newRate}
+          onChange={e => setNewRate(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="Rate"
+          type="number"
+          step="any"
+          min="0"
+          className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={!newCurrency.trim() || !newRate.trim()}
+          className="p-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 rounded-lg transition-colors"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
     </div>
   )
 }
 
-function ExchangeRateRow({ currency, rate, onUpdate }) {
+function ExchangeRateRow({ currency, rate, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(String(rate))
 
@@ -354,6 +393,9 @@ function ExchangeRateRow({ currency, rate, onUpdate }) {
       <button onClick={() => { setVal(String(rate)); setEditing(true) }} className="text-gray-500 hover:text-white transition-colors">
         <Pencil size={13} />
       </button>
+      <button onClick={onDelete} className="text-gray-500 hover:text-red-400 transition-colors">
+        <Trash2 size={13} />
+      </button>
     </div>
   )
 }
@@ -362,7 +404,9 @@ function SidebarAvatar({ user }) {
   const [imgFailed, setImgFailed] = useState(false)
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
-    : '?'
+    : user?.email
+      ? user.email[0].toUpperCase()
+      : '?'
 
   if (user?.picture && !imgFailed) {
     return (

@@ -109,6 +109,11 @@ export default function App() {
     await save()
   }, [run, save])
 
+  const handleDeleteExchangeRate = useCallback(async (currency) => {
+    run('DELETE FROM exchange_rates WHERE currency=?', [currency])
+    await save()
+  }, [run, save])
+
   const handleAddTransactionType = useCallback(async (name, is_income) => {
     run('INSERT OR IGNORE INTO transaction_types VALUES (?, ?)', [name, is_income])
     await save()
@@ -189,6 +194,7 @@ export default function App() {
         onRenamePaymentMethod={handleRenamePaymentMethod}
         onDeletePaymentMethod={handleDeletePaymentMethod}
         onUpdateExchangeRate={handleUpdateExchangeRate}
+        onDeleteExchangeRate={handleDeleteExchangeRate}
         onAddTransactionType={handleAddTransactionType}
         onRenameTransactionType={handleRenameTransactionType}
         onDeleteTransactionType={handleDeleteTransactionType}
