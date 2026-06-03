@@ -4,13 +4,57 @@ import sqlWasm from 'sql.js/dist/sql-wasm.wasm?url'
 import { loadDatabase, saveDatabase } from './useGoogleDrive'
 
 const DEFAULT_CATEGORIES = [
-  'dining', 'groceries', 'transport', 'lodging', 'shopping',
-  'equipment', 'professional_services', 'shipping', 'packing_supplies', 'storage', 'other'
+  'Dining', 'Groceries', 'Transport', 'Lodging', 'Shopping',
+  'Equipment', 'Professional Services', 'Shipping', 'Packing Supplies', 'Storage', 'Other'
 ]
 const DEFAULT_PAYMENT_METHODS = [
-  'schwab_checking', 'boa_checking', 'schwab_brokerage', 'cash', 'zelle', 'discover'
+  'Schwab Checking', 'BOA Checking', 'Schwab Brokerage', 'Cash', 'Zelle', 'Discover', 'Apple Card'
 ]
 const DEFAULT_EXCHANGE_RATES = { PAB: 1.00, EUR: 1.08 }
+const DEFAULT_TRANSACTION_TYPES = [
+  { name: 'Expense', is_income: 0 },
+  { name: 'Income', is_income: 1 },
+  { name: 'Transfer', is_income: 0 },
+  { name: 'Reimbursement', is_income: 1 },
+]
+
+// Maps old underscore/lowercase names → new display names
+const NAME_MIGRATIONS = {
+  categories: {
+    'dining': 'Dining',
+    'groceries': 'Groceries',
+    'transport': 'Transport',
+    'lodging': 'Lodging',
+    'shopping': 'Shopping',
+    'equipment': 'Equipment',
+    'professional_services': 'Professional Services',
+    'shipping': 'Shipping',
+    'packing_supplies': 'Packing Supplies',
+    'storage': 'Storage',
+    'other': 'Other',
+  },
+  payment_methods: {
+    'schwab_checking': 'Schwab Checking',
+    'boa_checking': 'BOA Checking',
+    'schwab_brokerage': 'Schwab Brokerage',
+    'cash': 'Cash',
+    'zelle': 'Zelle',
+    'discover': 'Discover',
+    'apple_card': 'Apple Card',
+    'chase': 'Chase',
+    'csv_apple': 'Apple Card',
+    'csv_chase': 'Chase',
+    'csv_discover': 'Discover',
+    'csv_boa': 'BOA Checking',
+    'csv_schwab': 'Schwab Checking',
+  },
+  transaction_types: {
+    'expense': 'Expense',
+    'income': 'Income',
+    'transfer': 'Transfer',
+    'reimbursement': 'Reimbursement',
+  },
+}
 
 function createSchema(db) {
   db.run(`
@@ -33,8 +77,17 @@ function createSchema(db) {
     CREATE TABLE IF NOT EXISTS categories (name TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS payment_methods (name TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS exchange_rates (currency TEXT PRIMARY KEY, rate REAL);
+    CREATE TABLE IF NOT EXISTS transaction_types (
+      name TEXT PRIMARY KEY,
+      is_income INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
   `)
 
+  // Column migrations
+  try { db.run('ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT "Expense"') } catch {}
+
+  // Seed defaults on first run
   const existingCats = db.exec('SELECT COUNT(*) FROM categories')[0]?.values[0][0]
   if (!existingCats) {
     DEFAULT_CATEGORIES.forEach(c => db.run('INSERT OR IGNORE INTO categories VALUES (?)', [c]))
@@ -43,12 +96,44 @@ function createSchema(db) {
       db.run('INSERT OR IGNORE INTO exchange_rates VALUES (?, ?)', [c, r])
     )
   }
+
+  const existingTypes = db.exec('SELECT COUNT(*) FROM transaction_types')[0]?.values[0][0]
+  if (!existingTypes) {
+    DEFAULT_TRANSACTION_TYPES.forEach(t =>
+      db.run('INSERT OR IGNORE INTO transaction_types VALUES (?, ?)', [t.name, t.is_income])
+    )
+  }
+
+  // One-time migration: rename old underscore/lowercase names to display names
+  const alreadyMigrated = db.exec(
+    "SELECT COUNT(*) FROM migrations WHERE name='display_names_v1'"
+  )[0]?.values[0][0]
+
+  if (!alreadyMigrated) {
+    // categories table + expenses.category column
+    Object.entries(NAME_MIGRATIONS.categories).forEach(([old, next]) => {
+      db.run('UPDATE categories SET name=? WHERE name=?', [next, old])
+      db.run('UPDATE expenses SET category=? WHERE category=?', [next, old])
+    })
+    // payment_methods table + expenses.payment_method column
+    Object.entries(NAME_MIGRATIONS.payment_methods).forEach(([old, next]) => {
+      db.run('UPDATE payment_methods SET name=? WHERE name=?', [next, old])
+      db.run('UPDATE expenses SET payment_method=? WHERE payment_method=?', [next, old])
+    })
+    // transaction_types table + expenses.type column
+    Object.entries(NAME_MIGRATIONS.transaction_types).forEach(([old, next]) => {
+      db.run('UPDATE transaction_types SET name=? WHERE name=?', [next, old])
+      db.run('UPDATE expenses SET type=? WHERE type=?', [next, old])
+    })
+    db.run("INSERT INTO migrations VALUES ('display_names_v1')")
+  }
 }
 
 export function useDatabase(accessToken) {
   const [db, setDb] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [, setTick] = useState(0)
   const driveRef = useRef({ folderId: null, fileId: null })
 
   useEffect(() => {
@@ -67,10 +152,9 @@ export function useDatabase(accessToken) {
         createSchema(database)
         setDb(database)
 
-        if (!fileId) {
-          const newFileId = await saveDatabase(accessToken, folderId, null, database.export())
-          driveRef.current.fileId = newFileId
-        }
+        // Save immediately after migration so Drive is up to date
+        const newFileId = await saveDatabase(accessToken, folderId, fileId ?? null, database.export())
+        if (!cancelled) driveRef.current.fileId = newFileId
       } catch (e) {
         if (!cancelled) setError(e.message)
       } finally {
@@ -100,6 +184,7 @@ export function useDatabase(accessToken) {
   const run = useCallback((sql, params = []) => {
     if (!db) return
     db.run(sql, params)
+    setTick(t => t + 1)
   }, [db])
 
   return { db, loading, error, save, query, run }
