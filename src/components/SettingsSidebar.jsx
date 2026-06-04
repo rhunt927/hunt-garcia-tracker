@@ -6,9 +6,9 @@ const MIN_WIDTH = 260
 const MAX_WIDTH = 600
 const DEFAULT_WIDTH = 288
 
-export function SettingsSidebar({ open, onClose, categories, paymentMethods, exchangeRates,
+export function SettingsSidebar({ open, onClose, categories, budgets, paymentMethods, exchangeRates,
   transactionTypes, user, onLogout,
-  onAddCategory, onRenameCategory, onDeleteCategory,
+  onAddCategory, onRenameCategory, onDeleteCategory, onSetBudget, onDeleteBudget,
   onAddPaymentMethod, onRenamePaymentMethod, onDeletePaymentMethod,
   onUpdateExchangeRate, onDeleteExchangeRate,
   onAddTransactionType, onRenameTransactionType, onDeleteTransactionType, onToggleTransactionTypeIncome,
@@ -80,12 +80,14 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
 
           <Section title="Categories" sectionKey="categories" collapsed={collapsed.has('categories')} onToggle={() => toggleSection('categories')}>
-            <ManageList
+            <CategoryBudgetList
               items={categories}
+              budgets={budgets}
               onAdd={onAddCategory}
               onRename={onRenameCategory}
               onDelete={onDeleteCategory}
-              placeholder="New category"
+              onSetBudget={onSetBudget}
+              onDeleteBudget={onDeleteBudget}
             />
           </Section>
 
@@ -149,6 +151,132 @@ function Section({ title, collapsed, onToggle, children }) {
         />
       </button>
       {!collapsed && <div className="pb-4">{children}</div>}
+    </div>
+  )
+}
+
+function CategoryBudgetList({ items, budgets, onAdd, onRename, onDelete, onSetBudget, onDeleteBudget }) {
+  const [newName, setNewName] = useState('')
+  const budgetMap = Object.fromEntries((budgets ?? []).map(b => [b.category, b.monthly_limit]))
+
+  function handleAdd() {
+    const name = newName.trim()
+    if (!name || items.includes(name)) return
+    onAdd(name)
+    setNewName('')
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {items.map(item => (
+        <CategoryBudgetRow
+          key={item}
+          name={item}
+          budget={budgetMap[item]}
+          onRename={n => onRename(item, n)}
+          onDelete={() => onDelete(item)}
+          onSetBudget={onSetBudget}
+          onDeleteBudget={onDeleteBudget}
+        />
+      ))}
+      <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
+        <input
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="New category"
+          className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={handleAdd}
+          disabled={!newName.trim()}
+          className="p-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 rounded-lg transition-colors"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CategoryBudgetRow({ name, budget, onRename, onDelete, onSetBudget, onDeleteBudget }) {
+  const [editingName, setEditingName] = useState(false)
+  const [nameVal, setNameVal] = useState(name)
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [budgetVal, setBudgetVal] = useState(budget != null ? String(budget) : '')
+
+  function confirmName() {
+    const trimmed = nameVal.trim()
+    if (trimmed && trimmed !== name) onRename(trimmed)
+    setEditingName(false)
+  }
+
+  function saveBudget() {
+    const amount = parseFloat(budgetVal)
+    if (!isNaN(amount) && amount > 0) onSetBudget(name, amount)
+    setEditingBudget(false)
+  }
+
+  function removeBudget() {
+    onDeleteBudget(name)
+    setBudgetVal('')
+    setEditingBudget(false)
+  }
+
+  return (
+    <div className="rounded-lg hover:bg-white/5">
+      {editingName ? (
+        <div className="flex items-center gap-2 px-2 py-1">
+          <input
+            autoFocus
+            value={nameVal}
+            onChange={e => setNameVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') confirmName(); if (e.key === 'Escape') setEditingName(false) }}
+            className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
+          />
+          <button onClick={confirmName} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+          <button onClick={() => setEditingName(false)} className="text-gray-500 hover:text-white"><X size={14} /></button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <span className="flex-1 text-sm text-gray-300 truncate">{name}</span>
+          <button
+            onClick={() => { setBudgetVal(budget != null ? String(budget) : ''); setEditingBudget(b => !b) }}
+            className={`text-xs px-1.5 py-0.5 rounded transition-colors shrink-0 ${
+              budget != null ? 'text-blue-400 bg-blue-900/20 hover:bg-blue-900/40' : 'text-gray-600 hover:text-gray-400'
+            }`}
+          >
+            {budget != null ? `$${budget}/mo` : '+ budget'}
+          </button>
+          <button onClick={() => { setNameVal(name); setEditingName(true) }} className="text-gray-500 hover:text-white transition-colors shrink-0">
+            <Pencil size={13} />
+          </button>
+          <button onClick={onDelete} className="text-gray-500 hover:text-red-400 transition-colors shrink-0">
+            <Trash2 size={13} />
+          </button>
+        </div>
+      )}
+      {editingBudget && !editingName && (
+        <div className="flex items-center gap-2 px-2 pb-2">
+          <span className="text-xs text-gray-500 shrink-0">$/mo</span>
+          <input
+            autoFocus
+            type="number"
+            value={budgetVal}
+            onChange={e => setBudgetVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveBudget(); if (e.key === 'Escape') setEditingBudget(false) }}
+            placeholder="Monthly limit"
+            min="0"
+            step="1"
+            className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
+          />
+          <button onClick={saveBudget} className="text-green-400 hover:text-green-300 shrink-0"><Check size={14} /></button>
+          <button onClick={() => setEditingBudget(false)} className="text-gray-500 hover:text-white shrink-0"><X size={14} /></button>
+          {budget != null && (
+            <button onClick={removeBudget} className="text-red-500 hover:text-red-400 text-xs shrink-0">remove</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

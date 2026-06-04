@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Upload, X, CheckSquare, Square, AlertTriangle } from 'lucide-react'
+import { Upload, X, CheckSquare, Square, AlertTriangle, HardDrive, FolderOpen } from 'lucide-react'
 import { parseCSV } from '../lib/csvParsers'
 import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
@@ -8,7 +8,7 @@ import { ExpenseForm } from './ExpenseForm'
 
 export function CSVImport({
   categories, existingExpenses, onImport, onClose,
-  paymentMethods, exchangeRates, transactionTypes,
+  paymentMethods, exchangeRates, transactionTypes, accessToken,
   onAddCategory, onRenameCategory, onDeleteCategory,
 }) {
   const inputRef = useRef(null)
@@ -17,6 +17,8 @@ export function CSVImport({
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
+  const [driveFiles, setDriveFiles] = useState(null)
+  const [driveLoading, setDriveLoading] = useState(false)
 
   function defaultCategory() {
     return categories.find(c => c.toLowerCase() === 'other') ?? categories[0] ?? ''
@@ -54,6 +56,46 @@ export function CSVImport({
       })))
     } catch (e) {
       setError(e.message)
+    }
+  }
+
+  async function browseDrive() {
+    if (!accessToken) return
+    setDriveLoading(true)
+    setError(null)
+    try {
+      const q = encodeURIComponent("(mimeType='text/csv' or mimeType='application/pdf') and trashed=false")
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc&pageSize=50`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (!res.ok) throw new Error('Could not load Drive files')
+      const { files } = await res.json()
+      setDriveFiles(files)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setDriveLoading(false)
+    }
+  }
+
+  async function pickDriveFile(file) {
+    setDriveFiles(null)
+    setDriveLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (!res.ok) throw new Error('Could not download file from Drive')
+      const blob = await res.blob()
+      const f = new File([blob], file.name, { type: blob.type })
+      await handleFile(f)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setDriveLoading(false)
     }
   }
 
@@ -178,21 +220,74 @@ export function CSVImport({
         </button>
       </div>
 
-      {/* Drop zone */}
-      {rows.length === 0 && (
-        <div
-          onDragOver={e => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
-            dragging ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 hover:border-white/20'
-          }`}
-        >
-          <Upload size={32} className="mx-auto mb-3 text-gray-500" />
-          <p className="text-sm text-gray-400">Drop a file here, or tap to browse</p>
-          <p className="text-xs text-gray-600 mt-1">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
-          <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover</p>
+      {/* File picker */}
+      {rows.length === 0 && !driveFiles && (
+        <>
+          <div
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+              dragging ? 'border-blue-500 bg-blue-500/10' : 'border-white/10'
+            }`}
+          >
+            <Upload size={28} className="mx-auto mb-2 text-gray-500" />
+            <p className="text-xs text-gray-500 mb-4">Drop a CSV or PDF here, or choose a source:</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl text-sm font-medium transition-colors"
+              >
+                <FolderOpen size={16} className="text-gray-400" />
+                Local File
+              </button>
+              {accessToken && (
+                <button
+                  type="button"
+                  onClick={browseDrive}
+                  disabled={driveLoading}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <HardDrive size={16} className="text-blue-400" />
+                  {driveLoading ? 'Loading…' : 'Google Drive'}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mt-4">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
+            <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover</p>
+          </div>
+        </>
+      )}
+
+      {/* Google Drive file browser */}
+      {driveFiles && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Select a file from Google Drive</span>
+            <button onClick={() => setDriveFiles(null)} className="text-gray-500 hover:text-white transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+          {driveFiles.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No CSV or PDF files found in Drive.</p>
+          ) : (
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {driveFiles.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => pickDriveFile(f)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 bg-gray-800/60 hover:bg-gray-700/60 border border-white/10 rounded-lg text-left transition-colors"
+                >
+                  <HardDrive size={14} className="text-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{f.name}</p>
+                    <p className="text-xs text-gray-500">{f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ''}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

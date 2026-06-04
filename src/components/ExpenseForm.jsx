@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, ScanLine } from 'lucide-react'
+import { X, ScanLine, RefreshCw } from 'lucide-react'
 import { ReceiptScanner } from './ReceiptScanner'
 import { CategorySelect } from './CategorySelect'
 import { toTitleCase } from '../lib/utils'
@@ -22,6 +22,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
     category: initialValues?.category ?? (categories[0] ?? ''),
     payment_method: initialValues?.payment_method ?? (paymentMethods[0] ?? ''),
     notes: initialValues?.notes ?? '',
+    is_recurring: initialValues?.is_recurring ? 1 : 0,
   })
 
   function set(field, value) {
@@ -62,6 +63,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
       receipt_filename: initialValues?.receipt_filename ?? null,
       source: initialValues?.source ?? 'manual',
       notes: form.notes.trim() || null,
+      is_recurring: form.is_recurring,
       created_at: initialValues?.created_at ?? now,
       updated_at: now,
     })
@@ -100,29 +102,39 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Type selector */}
-        {transactionTypes?.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            {transactionTypes.map(t => (
-              <button
-                key={t.name}
-                type="button"
-                onClick={() => set('type', t.name)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                  form.type === t.name
-                    ? t.is_transfer
-                      ? 'bg-gray-600/30 border-gray-500 text-gray-300'
-                      : t.is_income
-                        ? 'bg-green-600/30 border-green-500 text-green-300'
-                        : 'bg-blue-600/30 border-blue-500 text-blue-300'
-                    : 'bg-gray-800 border-white/10 text-gray-400 hover:text-white'
-                }`}
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Type selector + recurring */}
+        <div className="flex gap-2 flex-wrap">
+          {transactionTypes?.map(t => (
+            <button
+              key={t.name}
+              type="button"
+              onClick={() => set('type', t.name)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                form.type === t.name
+                  ? t.is_transfer
+                    ? 'bg-gray-600/30 border-gray-500 text-gray-300'
+                    : t.is_income
+                      ? 'bg-green-600/30 border-green-500 text-green-300'
+                      : 'bg-blue-600/30 border-blue-500 text-blue-300'
+                  : 'bg-gray-800 border-white/10 text-gray-400 hover:text-white'
+              }`}
+            >
+              {t.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => set('is_recurring', form.is_recurring ? 0 : 1)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+              form.is_recurring
+                ? 'bg-purple-600/30 border-purple-500 text-purple-300'
+                : 'bg-gray-800 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            <RefreshCw size={13} />
+            Recurring
+          </button>
+        </div>
 
         {/* Date + Merchant */}
         <div className="grid grid-cols-2 gap-3">

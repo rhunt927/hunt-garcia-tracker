@@ -45,30 +45,31 @@ export default function App() {
     : {}
   const transactionTypes = db ? query('SELECT name, is_income, is_transfer FROM transaction_types ORDER BY is_income, name') : []
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
+  const budgets = db ? query('SELECT category, monthly_limit FROM budgets ORDER BY category') : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
     try {
       if (formState === 'add') {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             expense.id, expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.category, expense.payment_method, expense.receipt_filename,
             expense.source, expense.notes, expense.created_at, expense.updated_at,
-            expense.type ?? 'Expense',
+            expense.type ?? 'Expense', expense.is_recurring ?? 0,
           ]
         )
       } else {
         run(
           `UPDATE expenses SET date=?, merchant=?, description=?, amount=?, currency=?,
-           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=? WHERE id=?`,
+           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=?, is_recurring=? WHERE id=?`,
           [
             expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.type, expense.category, expense.payment_method, expense.notes,
-            expense.updated_at, expense.id,
+            expense.updated_at, expense.is_recurring ?? 0, expense.id,
           ]
         )
       }
@@ -99,11 +100,23 @@ export default function App() {
   const handleRenameCategory = useCallback(async (oldName, newName) => {
     run('UPDATE categories SET name=? WHERE name=?', [newName, oldName])
     run('UPDATE expenses SET category=? WHERE category=?', [newName, oldName])
+    run('UPDATE budgets SET category=? WHERE category=?', [newName, oldName])
     await save()
   }, [run, save])
 
   const handleDeleteCategory = useCallback(async (name) => {
     run('DELETE FROM categories WHERE name=?', [name])
+    run('DELETE FROM budgets WHERE category=?', [name])
+    await save()
+  }, [run, save])
+
+  const handleSetBudget = useCallback(async (category, monthlyLimit) => {
+    run('INSERT OR REPLACE INTO budgets VALUES (?, ?)', [category, monthlyLimit])
+    await save()
+  }, [run, save])
+
+  const handleDeleteBudget = useCallback(async (category) => {
+    run('DELETE FROM budgets WHERE category=?', [category])
     await save()
   }, [run, save])
 
@@ -169,10 +182,10 @@ export default function App() {
       }
       for (const e of rows) {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [e.id, e.date, e.merchant, e.description, e.amount, e.currency,
            e.amount_usd, e.category, e.payment_method, e.receipt_filename,
-           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense']
+           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0]
         )
       }
       await save()
@@ -221,12 +234,15 @@ export default function App() {
         user={user}
         onLogout={logout}
         categories={categories}
+        budgets={budgets}
         paymentMethods={paymentMethods}
         exchangeRates={exchangeRates}
         transactionTypes={transactionTypes}
         onAddCategory={handleAddCategory}
         onRenameCategory={handleRenameCategory}
         onDeleteCategory={handleDeleteCategory}
+        onSetBudget={handleSetBudget}
+        onDeleteBudget={handleDeleteBudget}
         onAddPaymentMethod={handleAddPaymentMethod}
         onRenamePaymentMethod={handleRenamePaymentMethod}
         onDeletePaymentMethod={handleDeletePaymentMethod}
@@ -276,6 +292,7 @@ export default function App() {
                 exchangeRates={exchangeRates}
                 transactionTypes={transactionTypes}
                 existingExpenses={expenses}
+                accessToken={accessToken}
                 onImport={handleCSVImport}
                 onClose={() => setFormState(null)}
                 {...categoryProps}
@@ -321,6 +338,7 @@ export default function App() {
               <Dashboard
                 expenses={expenses}
                 transactionTypes={transactionTypes}
+                budgets={budgets}
                 selectedYear={dashboardYear}
                 selectedMonth={dashboardMonth}
                 setSelectedYear={setDashboardYear}
@@ -338,7 +356,7 @@ export default function App() {
   )
 }
 
-function Dashboard({ expenses, transactionTypes, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports }) {
+function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
@@ -428,6 +446,37 @@ function Dashboard({ expenses, transactionTypes, selectedYear, selectedMonth, se
           {net >= 0 ? '+' : ''}${net.toFixed(2)}
         </span>
       </div>
+
+      {/* Budget progress */}
+      {budgets?.length > 0 && (() => {
+        const budgetRows = budgets.map(b => {
+          const spent = monthExpenses
+            .filter(e => e.category === b.category && !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
+            .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+          const pct = b.monthly_limit > 0 ? spent / b.monthly_limit : 0
+          return { ...b, spent, pct }
+        }).sort((a, b) => b.pct - a.pct)
+        return (
+          <div className="space-y-2">
+            {budgetRows.map(({ category, monthly_limit, spent, pct }) => (
+              <div key={category} className="bg-gray-900/60 border border-white/10 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm text-gray-300">{category}</span>
+                  <span className={`text-xs font-medium ${pct >= 1 ? 'text-red-400' : pct >= 0.75 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                    ${spent.toFixed(0)} <span className="text-gray-600">/ ${monthly_limit.toFixed(0)}</span>
+                  </span>
+                </div>
+                <div className="w-full bg-gray-800 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${pct >= 1 ? 'bg-red-500' : pct >= 0.75 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                    style={{ width: `${Math.min(pct * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-3 pt-2">

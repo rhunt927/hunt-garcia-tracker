@@ -82,11 +82,16 @@ function createSchema(db) {
       is_income INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS budgets (
+      category TEXT PRIMARY KEY,
+      monthly_limit REAL NOT NULL
+    );
   `)
 
   // Column migrations
   try { db.run('ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT "Expense"') } catch {}
   try { db.run('ALTER TABLE transaction_types ADD COLUMN is_transfer INTEGER DEFAULT 0') } catch {}
+  try { db.run('ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0') } catch {}
   // Mark Transfer type as neutral (not income, not expense)
   db.run("UPDATE transaction_types SET is_transfer=1, is_income=0 WHERE name='Transfer'")
 
