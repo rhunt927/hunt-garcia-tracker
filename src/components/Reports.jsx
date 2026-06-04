@@ -225,7 +225,7 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
                   paddingAngle={2}
                   dataKey="value"
                   label={({ name, percent }) => percent >= 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : null}
-                  labelLine={({ percent }) => percent >= 0.05 ? { stroke: '#6b7280' } : null}
+                  labelLine={{ stroke: '#6b7280' }}
                 >
                   {pieData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
