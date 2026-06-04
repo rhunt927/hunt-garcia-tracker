@@ -39,26 +39,23 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Restore session immediately — no popup needed
     const { token, user: savedUser } = loadSession()
     if (token && savedUser) {
       setUser(savedUser)
       setAccessToken(token)
       setLoading(false)
-      // Refresh profile in background so picture/name stay fresh
       fetchUserProfile(token).then(userObj => {
         saveSession(userObj, token)
         setUser(userObj)
       }).catch(() => {})
-      return
     }
 
-    // Load GIS script for login
+    // Always load GIS script — needed for login and for re-login after token expiry
     const script = document.createElement('script')
     script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
     script.defer = true
-    script.onload = () => setLoading(false)
+    script.onload = () => { if (!token) setLoading(false) }
     document.body.appendChild(script)
   }, [])
 
