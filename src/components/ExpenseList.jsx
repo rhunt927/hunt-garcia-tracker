@@ -7,9 +7,12 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [selected, setSelected] = useState(new Set())
 
-  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income).map(t => t.name))
+  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
+  const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
   const filtered = expenses.filter(e => {
     const matchesSearch = !search ||
@@ -17,11 +20,13 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
         .some(v => v?.toLowerCase().includes(search.toLowerCase()))
     const matchesCategory = filterCategory === 'all' || e.category === filterCategory
     const matchesType = filterType === 'all' || e.type === filterType
-    return matchesSearch && matchesCategory && matchesType
+    const matchesFrom = !dateFrom || e.date >= dateFrom
+    const matchesTo = !dateTo || e.date <= dateTo
+    return matchesSearch && matchesCategory && matchesType && matchesFrom && matchesTo
   })
 
   const totalIncome = filtered.filter(e => incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
-  const totalExpenses = filtered.filter(e => !incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+  const totalExpenses = filtered.filter(e => !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
   const net = totalIncome - totalExpenses
 
   const selectedTotal = filtered
@@ -106,6 +111,32 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
           <Plus size={16} />
           Add
         </button>
+      </div>
+
+      {/* Date range row */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 shrink-0">From</span>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+          className="flex-1 bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+        />
+        <span className="text-xs text-gray-500 shrink-0">To</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+          className="flex-1 bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+        />
+        {(dateFrom || dateTo) && (
+          <button
+            onClick={() => { setDateFrom(''); setDateTo('') }}
+            className="text-xs text-gray-500 hover:text-white transition-colors shrink-0"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Summary / bulk action bar */}
