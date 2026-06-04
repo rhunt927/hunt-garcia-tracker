@@ -363,7 +363,7 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
           className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
         >
           <FileUp size={22} />
-          <span className="text-xs font-medium">Import CSV</span>
+          <span className="text-xs font-medium">Import</span>
         </button>
       </div>
     </div>

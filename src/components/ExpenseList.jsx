@@ -48,6 +48,7 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   async function handleBulkDelete() {
     const ids = [...selected].filter(id => filtered.some(e => e.id === id))
     if (!ids.length) return
+    if (!window.confirm(`Delete ${ids.length} transaction${ids.length === 1 ? '' : 's'}?`)) return
     await onBulkDelete(ids)
     setSelected(new Set())
   }
@@ -94,7 +95,7 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
         <button
           onClick={onImportCSV}
           className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap border border-white/10"
-          title="Import CSV"
+          title="Import"
         >
           <FileUp size={16} />
         </button>
@@ -233,7 +234,9 @@ function ExpenseRow({ expense: e, selected, isIncome, onToggle, onEdit, onDelete
           <Pencil size={14} />
         </button>
         <button
-          onClick={() => onDelete(e.id)}
+          onClick={() => {
+            if (window.confirm(`Delete "${e.merchant || e.description || 'this transaction'}"?`)) onDelete(e.id)
+          }}
           className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
           title="Delete"
         >

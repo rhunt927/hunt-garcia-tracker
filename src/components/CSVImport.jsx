@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Upload, X, CheckSquare, Square, AlertTriangle } from 'lucide-react'
 import { parseCSV } from '../lib/csvParsers'
+import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
 import { CategorySelect } from './CategorySelect'
 
@@ -23,7 +24,8 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
     if (!file) return
     setError(null)
     try {
-      const { rows: parsed, bankName: bank } = await parseCSV(file)
+      const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+      const { rows: parsed, bankName: bank } = isPDF ? await parsePDF(file) : await parseCSV(file)
       setBankName(bank)
       setRows(parsed.map(r => ({
         ...r,
@@ -91,7 +93,7 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
   return (
     <div className="bg-gray-900/90 backdrop-blur-sm rounded-xl border border-white/10 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Import CSV</h2>
+        <h2 className="text-lg font-semibold">Import</h2>
         <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
           <X size={20} />
         </button>
@@ -109,15 +111,16 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
           }`}
         >
           <Upload size={32} className="mx-auto mb-3 text-gray-500" />
-          <p className="text-sm text-gray-400">Drop a CSV file here, or click to browse</p>
-          <p className="text-xs text-gray-600 mt-1">Apple Card, Chase, Discover, BofA, Schwab</p>
+          <p className="text-sm text-gray-400">Drop a file here, or tap to browse</p>
+          <p className="text-xs text-gray-600 mt-1">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
+          <p className="text-xs text-gray-600">PDF: Schwab bank statement</p>
         </div>
       )}
 
       <input
         ref={inputRef}
         type="file"
-        accept=".csv"
+        accept=".csv,.pdf"
         className="hidden"
         onChange={e => handleFile(e.target.files?.[0])}
       />
