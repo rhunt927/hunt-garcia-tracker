@@ -138,6 +138,14 @@ export default function App() {
   const handleCSVImport = useCallback(async (rows) => {
     setSaving(true)
     try {
+      // Ensure any categories used in this import exist in the categories table
+      const seen = new Set()
+      for (const e of rows) {
+        if (e.category && !seen.has(e.category)) {
+          run('INSERT OR IGNORE INTO categories VALUES (?)', [e.category])
+          seen.add(e.category)
+        }
+      }
       for (const e of rows) {
         run(
           `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
