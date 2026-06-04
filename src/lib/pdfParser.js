@@ -38,13 +38,11 @@ export async function parsePDF(file) {
 }
 
 function detectBank(lines) {
-  // Check first 40 lines for bank identification
   const header = lines.slice(0, 40).join(' ')
   if (/charles schwab|schwab bank|schwab one/i.test(header)) return SCHWAB
   if (/bank of america/i.test(header)) return BOA
   if (/jpmorgan chase|chase bank|chase card|chase\.com/i.test(header)) return CHASE
   if (/discover bank|discover card|discover\.com/i.test(header)) return DISCOVER
-  // Looser fallback — bank name might appear further down
   const full = lines.join(' ')
   if (/schwab/i.test(full)) return SCHWAB
   if (/bank of america/i.test(full)) return BOA
@@ -53,25 +51,24 @@ function detectBank(lines) {
   return null
 }
 
-// ─── Bank configs ───────────────────────────────────────────────────────────
+// ─── Bank configs ────────────────────────────────────────────────────────────
 
 const SCHWAB = {
   name: 'Schwab',
   paymentMethod: 'Schwab Checking',
   source: 'pdf_schwab',
-  // Skip credits (deposits) — only import debits
-  creditSection: /^(deposits and other credits|total deposits|other credits)/i,
+  creditSection: /^(deposits and other credits|other credits)/i,
   debitSection: /^(withdrawals and other debits|checks paid|other debits)/i,
-  skipSection: /^(daily balance|total withdrawals|total checks)/i,
+  skipSection: /^(daily balance|total withdrawals|total deposits|total checks)/i,
 }
 
 const BOA = {
   name: 'Bank of America',
   paymentMethod: 'BOA Checking',
   source: 'pdf_boa',
-  creditSection: /^(deposits and other additions|interest earned|total (credits|deposits))/i,
+  creditSection: /^(deposits and other additions|interest earned)/i,
   debitSection: /^(withdrawals|checks|electronic withdrawals|other withdrawals|purchases)/i,
-  skipSection: /^(daily ledger|total withdrawals|total purchases)/i,
+  skipSection: /^(daily ledger|total withdrawals|total purchases|total deposits)/i,
 }
 
 const CHASE = {
@@ -80,40 +77,36 @@ const CHASE = {
   source: 'pdf_chase',
   creditSection: /^(payments and other credits|account activity credits|total credits|total payments)/i,
   debitSection: /^(purchases|transactions|account activity|other charges)/i,
-  skipSection: /^(total purchases|total transactions|2024|2025|2026)/i,
+  skipSection: /^(total purchases|total transactions)/i,
 }
 
 const DISCOVER = {
   name: 'Discover',
   paymentMethod: 'Discover',
   source: 'pdf_discover',
-  creditSection: /^(payments and credits|total payments)/i,
-  debitSection: /^(purchases|transactions|total purchases)/i,
-  skipSection: /^(total purchases|total transactions)/i,
+  creditSection: /^(payments and credits)/i,
+  debitSection: /^(purchases|transactions)/i,
+  skipSection: /^(total purchases|total transactions|total payments)/i,
 }
 
 // ─── Core parser ─────────────────────────────────────────────────────────────
 
 function parseStatementLines(lines, bank) {
-  // Extract statement year (first 4-digit year found wins)
   let year = new Date().getFullYear()
   for (const line of lines) {
     const m = line.match(/\b(20\d{2})\b/)
     if (m) { year = parseInt(m[1]); break }
   }
 
-  const rows = []
-  let skipSection = false
-  let inDebitSection = false
+  // First pass: section-aware (tag rows as debit or credit based on section)
+  const rows = parseSectionAware(lines, bank, year)
 
-  for (const line of lines) {
-    if (bank.skipSection?.test(line)) { skipSection = true; continue }
-    if (bank.creditSection?.test(line)) { skipSection = true; inDebitSection = false; continue }
-    if (bank.debitSection?.test(line)) { skipSection = false; inDebitSection = true; continue }
-    if (skipSection) continue
-
-    const parsed = parseTxnLine(line, year, bank)
-    if (parsed) rows.push(parsed)
+  // Fallback: if section headers didn't match, scan all lines as debits
+  if (rows.length === 0) {
+    for (const line of lines) {
+      const parsed = parseTxnLine(line, year, bank, false)
+      if (parsed) rows.push(parsed)
+    }
   }
 
   if (rows.length === 0) {
@@ -123,37 +116,49 @@ function parseStatementLines(lines, bank) {
   return { rows, bankName: `${bank.name} (PDF)` }
 }
 
+function parseSectionAware(lines, bank, year) {
+  const rows = []
+  let sectionType = null  // null | 'debit' | 'credit' — start null, require explicit entry
+
+  for (const line of lines) {
+    if (bank.skipSection?.test(line))   { sectionType = null;     continue }
+    if (bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
+    if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
+    if (!sectionType) continue
+
+    const parsed = parseTxnLine(line, year, bank, sectionType === 'credit')
+    if (parsed) rows.push(parsed)
+  }
+
+  return rows
+}
+
 // Parse a single transaction line.
-// Strategy: find a date at start, then first dollar amount = txn amount, text between = description.
-// Handles:
-//   "05/01 AMAZON 42.99 9957.01"          (checking: txn amt + running balance)
-//   "05/01 05/03 AMAZON 42.99"            (credit card: trans date + post date + desc + amt)
-//   "05/01/2026 AMAZON -42.99"            (full year date, possible negative)
-function parseTxnLine(line, year, bank) {
-  // Must start with a date
+// For debits: first positive amount on line = txn amount (running balance after it is ignored).
+// For credits: same approach; take absolute value in case some banks use negatives in credit sections.
+function parseTxnLine(line, year, bank, isCredit) {
   const dateMatch = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)/)
   if (!dateMatch) return null
 
   let rest = line.slice(dateMatch[1].length).trim()
-
-  // Strip a second date if present at start (post-date column on credit cards)
+  // Strip a second date if present at start (post-date column on credit card statements)
   rest = rest.replace(/^\d{2}\/\d{2}(?:\/\d{2,4})?\s+/, '')
 
-  // Find first dollar amount — this is the transaction amount
+  // Find first dollar amount
   const amountMatch = rest.match(/(-?[\d,]+\.\d{2})/)
   if (!amountMatch) return null
 
   const rawAmount = parseFloat(amountMatch[1].replace(/,/g, ''))
-  // Skip credits (negative on credit cards = payment/refund) and zeros
-  if (rawAmount <= 0) return null
+  const amount = Math.abs(rawAmount)
+  if (!amount || amount <= 0) return null
 
   const description = rest.slice(0, amountMatch.index).trim()
   if (!description || description.length < 2) return null
 
-  // Skip obvious non-transactions
+  // Skip obvious summary/balance lines
   if (/^(beginning|ending|total|balance|interest paid|service fee|new balance|minimum)/i.test(description)) return null
 
-  // Normalize date
+  // Normalize date to YYYY-MM-DD
   const parts = dateMatch[1].split('/')
   const mm = parts[0].padStart(2, '0')
   const dd = parts[1].padStart(2, '0')
@@ -165,11 +170,12 @@ function parseTxnLine(line, year, bank) {
     date: `${yyyy}-${mm}-${dd}`,
     merchant: description,
     description: null,
-    amount: rawAmount,
+    amount,
     currency: 'USD',
-    amount_usd: rawAmount,
+    amount_usd: amount,
     category: null,
     payment_method: bank.paymentMethod,
     source: bank.source,
+    isCredit: !!isCredit,
   }
 }

@@ -235,6 +235,9 @@ export default function App() {
             {formState === 'csv' ? (
               <CSVImport
                 categories={categories}
+                paymentMethods={paymentMethods}
+                exchangeRates={exchangeRates}
+                transactionTypes={transactionTypes}
                 existingExpenses={expenses}
                 onImport={handleCSVImport}
                 onClose={() => setFormState(null)}

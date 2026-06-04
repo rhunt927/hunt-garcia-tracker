@@ -4,13 +4,23 @@ import { parseCSV } from '../lib/csvParsers'
 import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
 import { CategorySelect } from './CategorySelect'
+import { ExpenseForm } from './ExpenseForm'
 
-export function CSVImport({ categories, existingExpenses, onImport, onClose, onAddCategory, onRenameCategory, onDeleteCategory }) {
+export function CSVImport({
+  categories, existingExpenses, onImport, onClose,
+  paymentMethods, exchangeRates, transactionTypes,
+  onAddCategory, onRenameCategory, onDeleteCategory,
+}) {
   const inputRef = useRef(null)
   const [bankName, setBankName] = useState(null)
-  const [rows, setRows] = useState([])       // { ...parsed, id, selected, isDuplicate, category }
+  const [rows, setRows] = useState([])
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
+
+  function defaultCategory() {
+    return categories.find(c => c.toLowerCase() === 'other') ?? categories[0] ?? ''
+  }
 
   function isDuplicate(row) {
     return existingExpenses.some(e =>
@@ -18,6 +28,13 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
       e.amount_usd === row.amount_usd &&
       e.merchant?.toLowerCase() === row.merchant?.toLowerCase()
     )
+  }
+
+  function defaultType(isCredit) {
+    if (isCredit) {
+      return transactionTypes?.find(t => t.is_income)?.name ?? 'Income'
+    }
+    return transactionTypes?.find(t => !t.is_income)?.name ?? 'Expense'
   }
 
   async function handleFile(file) {
@@ -32,7 +49,8 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
         _id: crypto.randomUUID(),
         selected: true,
         isDuplicate: isDuplicate(r),
-        category: r.category ?? 'other',
+        category: r.category ?? defaultCategory(),
+        type: r.type ?? defaultType(r.isCredit),
       })))
     } catch (e) {
       setError(e.message)
@@ -59,6 +77,26 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
     setRows(rs => rs.map(r => r._id === id ? { ...r, category } : r))
   }
 
+  function handleEditRowSave(expense) {
+    const incomeTypes = new Set((transactionTypes ?? []).filter(t => t.is_income).map(t => t.name))
+    setRows(rs => rs.map(r => r._id === editingRow._id ? {
+      ...r,
+      date: expense.date,
+      merchant: expense.merchant,
+      description: expense.description,
+      amount: expense.amount,
+      currency: expense.currency,
+      amount_usd: expense.amount_usd,
+      type: expense.type,
+      isCredit: incomeTypes.has(expense.type),
+      category: expense.category,
+      payment_method: expense.payment_method,
+      notes: expense.notes,
+      isDuplicate: isDuplicate({ date: expense.date, amount_usd: expense.amount_usd, merchant: expense.merchant }),
+    } : r))
+    setEditingRow(null)
+  }
+
   function handleImport() {
     const toImport = rows
       .filter(r => r.selected && !r.isDuplicate)
@@ -72,16 +110,47 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
           amount: r.amount,
           currency: r.currency,
           amount_usd: r.amount_usd,
+          type: r.type ?? 'Expense',
           category: r.category,
           payment_method: r.payment_method ?? null,
           receipt_filename: null,
           source: r.source,
-          notes: null,
+          notes: r.notes ?? null,
           created_at: now,
           updated_at: now,
         }
       })
     onImport(toImport)
+  }
+
+  // Show full ExpenseForm when editing a row
+  if (editingRow) {
+    return (
+      <ExpenseForm
+        categories={categories}
+        paymentMethods={paymentMethods}
+        exchangeRates={exchangeRates}
+        transactionTypes={transactionTypes}
+        initialValues={{
+          id: editingRow._id,
+          date: editingRow.date,
+          merchant: editingRow.merchant ?? '',
+          description: editingRow.description ?? '',
+          amount: editingRow.amount,
+          currency: editingRow.currency ?? 'USD',
+          type: editingRow.type ?? transactionTypes?.[0]?.name ?? 'Expense',
+          category: editingRow.category,
+          payment_method: editingRow.payment_method ?? '',
+          notes: editingRow.notes ?? '',
+          source: editingRow.source,
+        }}
+        onSave={handleEditRowSave}
+        onCancel={() => setEditingRow(null)}
+        onAddCategory={onAddCategory}
+        onRenameCategory={onRenameCategory}
+        onDeleteCategory={onDeleteCategory}
+      />
+    )
   }
 
   const selectableRows = rows.filter(r => !r.isDuplicate)
@@ -113,7 +182,7 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
           <Upload size={32} className="mx-auto mb-3 text-gray-500" />
           <p className="text-sm text-gray-400">Drop a file here, or tap to browse</p>
           <p className="text-xs text-gray-600 mt-1">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
-          <p className="text-xs text-gray-600">PDF: Schwab bank statement</p>
+          <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover</p>
         </div>
       )}
 
@@ -172,10 +241,7 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
               </thead>
               <tbody className="divide-y divide-white/5">
                 {rows.map(row => (
-                  <tr
-                    key={row._id}
-                    className={row.isDuplicate ? 'opacity-40' : ''}
-                  >
+                  <tr key={row._id} className={row.isDuplicate ? 'opacity-40' : 'cursor-pointer'}>
                     <td className="px-3 py-2">
                       {row.isDuplicate ? (
                         <span title="Duplicate" className="text-yellow-600">
@@ -189,9 +255,19 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
                         </button>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{row.date}</td>
-                    <td className="px-3 py-2 text-white max-w-[180px] truncate">{row.merchant}</td>
-                    <td className="px-3 py-2">
+                    <td
+                      className="px-3 py-2 text-gray-400 whitespace-nowrap hover:text-white transition-colors"
+                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                    >
+                      {row.date}
+                    </td>
+                    <td
+                      className="px-3 py-2 text-white max-w-[140px] truncate hover:text-blue-300 transition-colors"
+                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                    >
+                      {row.merchant}
+                    </td>
+                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {row.isDuplicate ? (
                         <span className="text-xs text-gray-600">{toTitleCase(row.category)}</span>
                       ) : (
@@ -205,14 +281,19 @@ export function CSVImport({ categories, existingExpenses, onImport, onClose, onA
                         />
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right text-green-400 whitespace-nowrap">
-                      ${row.amount_usd.toFixed(2)}
+                    <td
+                      className={`px-3 py-2 text-right whitespace-nowrap transition-colors ${row.isCredit ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'}`}
+                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                    >
+                      {row.isCredit ? '+' : ''}{row.currency !== 'USD' ? `${row.amount.toFixed(2)} ${row.currency}` : `$${row.amount_usd.toFixed(2)}`}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <div className="text-xs text-gray-600 text-center">Tap a row to edit details</div>
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-1">
