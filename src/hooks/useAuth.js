@@ -37,6 +37,7 @@ export function useAuth() {
   const [user, setUser] = useState(null)
   const [accessToken, setAccessToken] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [gisReady, setGisReady] = useState(false)
 
   useEffect(() => {
     const { token, user: savedUser } = loadSession()
@@ -55,7 +56,11 @@ export function useAuth() {
     script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
     script.defer = true
-    script.onload = () => { if (!token) setLoading(false) }
+    script.onload = () => {
+      setGisReady(true)
+      if (!token) setLoading(false)
+    }
+    script.onerror = () => { if (!token) setLoading(false) }
     document.body.appendChild(script)
   }, [])
 
@@ -96,5 +101,5 @@ export function useAuth() {
     setAccessToken(null)
   }
 
-  return { user, accessToken, loading, login, logout, clearAuth }
+  return { user, accessToken, loading, gisReady, login, logout, clearAuth }
 }
