@@ -110,13 +110,17 @@ export default function App() {
     await save()
   }, [run, save])
 
-  const handleSetBudget = useCallback(async (category, monthlyLimit) => {
-    run('INSERT OR REPLACE INTO budgets VALUES (?, ?)', [category, monthlyLimit])
+  const handleSetBudget = useCallback(async (category, year, monthlyLimit) => {
+    run('INSERT OR REPLACE INTO budgets VALUES (?, ?, ?)', [category, year, monthlyLimit])
     await save()
   }, [run, save])
 
-  const handleDeleteBudget = useCallback(async (category) => {
-    run('DELETE FROM budgets WHERE category=?', [category])
+  const handleDeleteBudget = useCallback(async (category, year) => {
+    if (year != null) {
+      run('DELETE FROM budgets WHERE category=? AND year=?', [category, year])
+    } else {
+      run('DELETE FROM budgets WHERE category=?', [category])
+    }
     await save()
   }, [run, save])
 
@@ -449,7 +453,9 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
 
       {/* Budget progress */}
       {budgets?.length > 0 && (() => {
-        const budgetRows = budgets.map(b => {
+        const yearBudgets = budgets.filter(b => b.year === selectedYear)
+        if (yearBudgets.length === 0) return null
+        const budgetRows = yearBudgets.map(b => {
           const spent = monthExpenses
             .filter(e => e.category === b.category && !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
             .reduce((s, e) => s + (e.amount_usd ?? 0), 0)

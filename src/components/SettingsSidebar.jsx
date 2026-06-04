@@ -124,7 +124,7 @@ export function SettingsSidebar({ open, onClose, categories, budgets, paymentMet
           <SidebarAvatar user={user} />
           <span className="flex-1 text-sm text-gray-300 truncate">{user?.name || user?.email || 'User'}</span>
           <button
-            onClick={() => { onLogout(); window.close() }}
+            onClick={onLogout}
             className="text-sm text-gray-500 hover:text-red-400 transition-colors whitespace-nowrap"
           >
             Sign out
@@ -157,7 +157,13 @@ function Section({ title, collapsed, onToggle, children }) {
 
 function CategoryBudgetList({ items, budgets, onAdd, onRename, onDelete, onSetBudget, onDeleteBudget }) {
   const [newName, setNewName] = useState('')
-  const budgetMap = Object.fromEntries((budgets ?? []).map(b => [b.category, b.monthly_limit]))
+
+  // Group budgets by category: { "Dining": [{year, monthly_limit}, ...], ... }
+  const budgetsByCategory = {}
+  ;(budgets ?? []).forEach(b => {
+    if (!budgetsByCategory[b.category]) budgetsByCategory[b.category] = []
+    budgetsByCategory[b.category].push(b)
+  })
 
   function handleAdd() {
     const name = newName.trim()
@@ -172,7 +178,7 @@ function CategoryBudgetList({ items, budgets, onAdd, onRename, onDelete, onSetBu
         <CategoryBudgetRow
           key={item}
           name={item}
-          budget={budgetMap[item]}
+          budgetsForCategory={budgetsByCategory[item] ?? []}
           onRename={n => onRename(item, n)}
           onDelete={() => onDelete(item)}
           onSetBudget={onSetBudget}
@@ -199,82 +205,118 @@ function CategoryBudgetList({ items, budgets, onAdd, onRename, onDelete, onSetBu
   )
 }
 
-function CategoryBudgetRow({ name, budget, onRename, onDelete, onSetBudget, onDeleteBudget }) {
-  const [editingName, setEditingName] = useState(false)
+function CategoryBudgetRow({ name, budgetsForCategory, onRename, onDelete, onSetBudget, onDeleteBudget }) {
+  const currentYear = new Date().getFullYear()
+  const [editing, setEditing] = useState(false)
   const [nameVal, setNameVal] = useState(name)
-  const [editingBudget, setEditingBudget] = useState(false)
-  const [budgetVal, setBudgetVal] = useState(budget != null ? String(budget) : '')
+  const [budgetYear, setBudgetYear] = useState(currentYear)
+  const [budgetAmount, setBudgetAmount] = useState('')
 
-  function confirmName() {
+  function openEdit() {
+    setNameVal(name)
+    const yr = currentYear
+    setBudgetYear(yr)
+    const existing = budgetsForCategory.find(b => b.year === yr)
+    setBudgetAmount(existing ? String(existing.monthly_limit) : '')
+    setEditing(true)
+  }
+
+  function handleYearChange(yr) {
+    setBudgetYear(yr)
+    const existing = budgetsForCategory.find(b => b.year === yr)
+    setBudgetAmount(existing ? String(existing.monthly_limit) : '')
+  }
+
+  function save() {
     const trimmed = nameVal.trim()
     if (trimmed && trimmed !== name) onRename(trimmed)
-    setEditingName(false)
+    const amount = parseFloat(budgetAmount)
+    if (!isNaN(amount) && amount > 0) onSetBudget(trimmed || name, budgetYear, amount)
+    setEditing(false)
   }
 
-  function saveBudget() {
-    const amount = parseFloat(budgetVal)
-    if (!isNaN(amount) && amount > 0) onSetBudget(name, amount)
-    setEditingBudget(false)
-  }
-
-  function removeBudget() {
-    onDeleteBudget(name)
-    setBudgetVal('')
-    setEditingBudget(false)
-  }
+  const hasExistingBudgetForYear = !!budgetsForCategory.find(b => b.year === budgetYear)
 
   return (
-    <div className="rounded-lg hover:bg-white/5">
-      {editingName ? (
-        <div className="flex items-center gap-2 px-2 py-1">
-          <input
-            autoFocus
-            value={nameVal}
-            onChange={e => setNameVal(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmName(); if (e.key === 'Escape') setEditingName(false) }}
-            className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
-          />
-          <button onClick={confirmName} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
-          <button onClick={() => setEditingName(false)} className="text-gray-500 hover:text-white"><X size={14} /></button>
+    <div className="rounded-lg">
+      {editing ? (
+        <div className="bg-gray-900/60 border border-white/10 rounded-xl px-3 py-3 space-y-3 my-1">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Category Name</label>
+            <input
+              autoFocus
+              value={nameVal}
+              onChange={e => setNameVal(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && setEditing(false)}
+              className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Monthly Budget ($)</label>
+              <input
+                type="number"
+                value={budgetAmount}
+                onChange={e => setBudgetAmount(e.target.value)}
+                placeholder="No limit"
+                min="0"
+                step="10"
+                className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Year</label>
+              <input
+                type="number"
+                value={budgetYear}
+                onChange={e => handleYearChange(parseInt(e.target.value) || currentYear)}
+                min="2020"
+                max="2099"
+                className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg py-2 text-sm font-medium transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="flex-1 bg-gray-800 hover:bg-gray-700 rounded-lg py-2 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            {hasExistingBudgetForYear && (
+              <button
+                onClick={() => { onDeleteBudget(name, budgetYear); setEditing(false) }}
+                className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
+              >
+                Remove
+              </button>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <span className="flex-1 text-sm text-gray-300 truncate">{name}</span>
-          <button
-            onClick={() => { setBudgetVal(budget != null ? String(budget) : ''); setEditingBudget(b => !b) }}
-            className={`text-xs px-1.5 py-0.5 rounded transition-colors shrink-0 ${
-              budget != null ? 'text-blue-400 bg-blue-900/20 hover:bg-blue-900/40' : 'text-gray-600 hover:text-gray-400'
-            }`}
-          >
-            {budget != null ? `$${budget}/mo` : '+ budget'}
-          </button>
-          <button onClick={() => { setNameVal(name); setEditingName(true) }} className="text-gray-500 hover:text-white transition-colors shrink-0">
+        <div className="flex items-start gap-2 px-2 py-1.5 hover:bg-white/5 rounded-lg">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-gray-300">{name}</span>
+            {budgetsForCategory.length > 0 && (
+              <div className="flex gap-2 flex-wrap mt-0.5">
+                {budgetsForCategory.sort((a, b) => a.year - b.year).map(b => (
+                  <span key={b.year} className="text-xs text-blue-400/70">{b.year}: ${b.monthly_limit}/mo</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={openEdit} className="text-gray-500 hover:text-white transition-colors shrink-0 mt-0.5">
             <Pencil size={13} />
           </button>
-          <button onClick={onDelete} className="text-gray-500 hover:text-red-400 transition-colors shrink-0">
+          <button onClick={onDelete} className="text-gray-500 hover:text-red-400 transition-colors shrink-0 mt-0.5">
             <Trash2 size={13} />
           </button>
-        </div>
-      )}
-      {editingBudget && !editingName && (
-        <div className="flex items-center gap-2 px-2 pb-2">
-          <span className="text-xs text-gray-500 shrink-0">$/mo</span>
-          <input
-            autoFocus
-            type="number"
-            value={budgetVal}
-            onChange={e => setBudgetVal(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') saveBudget(); if (e.key === 'Escape') setEditingBudget(false) }}
-            placeholder="Monthly limit"
-            min="0"
-            step="1"
-            className="flex-1 bg-gray-900 border border-blue-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
-          />
-          <button onClick={saveBudget} className="text-green-400 hover:text-green-300 shrink-0"><Check size={14} /></button>
-          <button onClick={() => setEditingBudget(false)} className="text-gray-500 hover:text-white shrink-0"><X size={14} /></button>
-          {budget != null && (
-            <button onClick={removeBudget} className="text-red-500 hover:text-red-400 text-xs shrink-0">remove</button>
-          )}
         </div>
       )}
     </div>

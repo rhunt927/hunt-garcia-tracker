@@ -83,8 +83,10 @@ function createSchema(db) {
     );
     CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS budgets (
-      category TEXT PRIMARY KEY,
-      monthly_limit REAL NOT NULL
+      category TEXT NOT NULL,
+      year INTEGER NOT NULL,
+      monthly_limit REAL NOT NULL,
+      PRIMARY KEY (category, year)
     );
   `)
 
@@ -92,6 +94,14 @@ function createSchema(db) {
   try { db.run('ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT "Expense"') } catch {}
   try { db.run('ALTER TABLE transaction_types ADD COLUMN is_transfer INTEGER DEFAULT 0') } catch {}
   try { db.run('ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0') } catch {}
+
+  // Recreate budgets table with year support if it's the old single-column schema
+  const budgetMigrated = db.exec("SELECT COUNT(*) FROM migrations WHERE name='budgets_per_year_v1'")[0]?.values[0][0]
+  if (!budgetMigrated) {
+    db.run('DROP TABLE IF EXISTS budgets')
+    db.run('CREATE TABLE budgets (category TEXT NOT NULL, year INTEGER NOT NULL, monthly_limit REAL NOT NULL, PRIMARY KEY (category, year))')
+    db.run("INSERT INTO migrations VALUES ('budgets_per_year_v1')")
+  }
   // Mark Transfer type as neutral (not income, not expense)
   db.run("UPDATE transaction_types SET is_transfer=1, is_income=0 WHERE name='Transfer'")
 
