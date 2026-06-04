@@ -22,8 +22,8 @@ export function CategorySelect({ value, onChange, categories, onAdd, className =
   function confirmAdd() {
     const name = newName.trim()
     if (!name) { setAddingNew(false); setNewName(''); return }
-    if (!categories.includes(name) && onAdd) onAdd(name)
-    onChange(name)   // always update selection whether category is new or existing
+    onAdd?.(name)  // always call — INSERT OR IGNORE is idempotent, no harm if it exists
+    onChange(name)
     setAddingNew(false)
     setNewName('')
   }

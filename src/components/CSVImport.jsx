@@ -79,6 +79,8 @@ export function CSVImport({
   }
 
   function setCategory(id, category) {
+    // Persist any new category to the DB immediately, not just at import time
+    if (category && !categories.includes(category)) onAddCategory?.(category)
     setRows(rs => rs.map(r => r._id === id ? { ...r, category } : r))
   }
 
