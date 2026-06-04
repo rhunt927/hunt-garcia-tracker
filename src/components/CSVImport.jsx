@@ -73,12 +73,20 @@ export function CSVImport({
     setRows(rs => rs.map(r => r.isDuplicate ? r : { ...r, selected: !allSelected }))
   }
 
+  function typeFlags(typeName) {
+    const t = (transactionTypes ?? []).find(t => t.name === typeName)
+    return { isCredit: !!(t?.is_income && !t?.is_transfer), isTransfer: !!t?.is_transfer }
+  }
+
   function setCategory(id, category) {
     setRows(rs => rs.map(r => r._id === id ? { ...r, category } : r))
   }
 
+  function setType(id, type) {
+    setRows(rs => rs.map(r => r._id === id ? { ...r, type, ...typeFlags(type) } : r))
+  }
+
   function handleEditRowSave(expense) {
-    const incomeTypes = new Set((transactionTypes ?? []).filter(t => t.is_income).map(t => t.name))
     setRows(rs => rs.map(r => r._id === editingRow._id ? {
       ...r,
       date: expense.date,
@@ -88,7 +96,7 @@ export function CSVImport({
       currency: expense.currency,
       amount_usd: expense.amount_usd,
       type: expense.type,
-      isCredit: incomeTypes.has(expense.type),
+      ...typeFlags(expense.type),
       category: expense.category,
       payment_method: expense.payment_method,
       notes: expense.notes,
@@ -235,6 +243,7 @@ export function CSVImport({
                   </th>
                   <th className="px-3 py-2 text-left text-gray-400 font-normal">Date</th>
                   <th className="px-3 py-2 text-left text-gray-400 font-normal">Merchant</th>
+                  <th className="px-3 py-2 text-left text-gray-400 font-normal">Type</th>
                   <th className="px-3 py-2 text-left text-gray-400 font-normal">Category</th>
                   <th className="px-3 py-2 text-right text-gray-400 font-normal">Amount</th>
                 </tr>
@@ -269,6 +278,21 @@ export function CSVImport({
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {row.isDuplicate ? (
+                        <span className="text-xs text-gray-600">{row.type}</span>
+                      ) : (
+                        <select
+                          value={row.type ?? ''}
+                          onChange={e => setType(row._id, e.target.value)}
+                          className="bg-gray-800 border border-white/10 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                        >
+                          {(transactionTypes ?? []).map(t => (
+                            <option key={t.name} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                      {row.isDuplicate ? (
                         <span className="text-xs text-gray-600">{toTitleCase(row.category)}</span>
                       ) : (
                         <CategorySelect
@@ -282,7 +306,11 @@ export function CSVImport({
                       )}
                     </td>
                     <td
-                      className={`px-3 py-2 text-right whitespace-nowrap transition-colors ${row.isCredit ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'}`}
+                      className={`px-3 py-2 text-right whitespace-nowrap transition-colors ${
+                        row.isCredit ? 'text-green-400 hover:text-green-300' :
+                        row.isTransfer ? 'text-gray-400 hover:text-gray-300' :
+                        'text-red-400 hover:text-red-300'
+                      }`}
                       onClick={() => !row.isDuplicate && setEditingRow(row)}
                     >
                       {row.isCredit ? '+' : ''}{row.currency !== 'USD' ? `${row.amount.toFixed(2)} ${row.currency}` : `$${row.amount_usd.toFixed(2)}`}
