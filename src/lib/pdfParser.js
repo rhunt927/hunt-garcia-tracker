@@ -98,20 +98,21 @@ function parseStatementLines(lines, bank) {
     if (m) { year = parseInt(m[1]); break }
   }
 
-  // Pass 1: strict section-aware (header must be at start of line)
-  let rows = parseSectionAware(lines, bank, year, false)
+  // Pass 1: strict section-aware (header must start the line)
+  let rows = parseSectionAware(lines, bank, year)
 
-  // Pass 2: loose section-aware (header anywhere in line — handles indented/wrapped headers)
-  if (rows.length === 0) {
-    rows = parseSectionAware(lines, bank, year, true)
+  // After section detection, apply keyword override per row — fixes cases where
+  // a deposit/credit ends up in the wrong section in a PDF (e.g. Schwab Zelle credits
+  // appearing under the Withdrawals header).
+  if (rows.length > 0) {
+    rows = rows.map(r => ({ ...r, isCredit: keywordOverride(r.merchant, r.isCredit) }))
+    return { rows, bankName: `${bank.name} (PDF)` }
   }
 
-  // Pass 3: no section detection — scan all lines, classify credit vs debit by description keywords
-  if (rows.length === 0) {
-    for (const line of lines) {
-      const parsed = parseTxnLine(line, year, bank, null)  // null = auto-classify
-      if (parsed) rows.push(parsed)
-    }
+  // Pass 2: no section headers found — scan all lines, classify purely by keywords
+  for (const line of lines) {
+    const parsed = parseTxnLine(line, year, bank, null)
+    if (parsed) rows.push(parsed)
   }
 
   if (rows.length === 0) {
@@ -121,23 +122,14 @@ function parseStatementLines(lines, bank) {
   return { rows, bankName: `${bank.name} (PDF)` }
 }
 
-function parseSectionAware(lines, bank, year, loose) {
+function parseSectionAware(lines, bank, year) {
   const rows = []
   let sectionType = null
 
-  // In loose mode, strip ^ so the header can appear anywhere in the line
-  function makeLoose(re) {
-    if (!re) return null
-    return new RegExp(re.source.replace(/^\^/, ''), re.flags)
-  }
-  const creditRe = loose ? makeLoose(bank.creditSection) : bank.creditSection
-  const debitRe  = loose ? makeLoose(bank.debitSection)  : bank.debitSection
-  const skipRe   = loose ? makeLoose(bank.skipSection)   : bank.skipSection
-
   for (const line of lines) {
-    if (skipRe?.test(line))   { sectionType = null;     continue }
-    if (creditRe?.test(line)) { sectionType = 'credit'; continue }
-    if (debitRe?.test(line))  { sectionType = 'debit';  continue }
+    if (bank.skipSection?.test(line))   { sectionType = null;     continue }
+    if (bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
+    if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
     const parsed = parseTxnLine(line, year, bank, sectionType === 'credit')
@@ -147,16 +139,16 @@ function parseSectionAware(lines, bank, year, loose) {
   return rows
 }
 
-// Classify a transaction description as credit or debit using keywords,
-// for when section headers aren't available.
-function classifyByDescription(description) {
-  // Explicit debit keywords
-  if (/\b(withdrawal|debit card|debit purchase|ach debit|check paid)\b/i.test(description)) return false
-  // Explicit credit keywords (but not "credit card" purchases)
-  if (/\bcredit\b/i.test(description) && !/\bcredit\s+card\b/i.test(description)) return true
-  if (/\b(deposit|refund|incoming|received|reimbursement)\b/i.test(description)) return true
-  // Default to debit
-  return false
+// After section detection, let strong description keywords override the section classification.
+// This handles PDFs where a credit transaction appears under the wrong section header.
+function keywordOverride(description, sectionIsCredit) {
+  if (!description) return sectionIsCredit
+  // Strongly implies credit
+  if (/\b(credit|deposit|refund|incoming|received|reimbursement)\b/i.test(description) &&
+      !/\bcredit\s+card\b/i.test(description)) return true
+  // Strongly implies debit
+  if (/\b(withdrawal|check\s+paid|ach\s+debit)\b/i.test(description)) return false
+  return sectionIsCredit
 }
 
 // Parse a single transaction line.
@@ -192,7 +184,7 @@ function parseTxnLine(line, year, bank, isCredit) {
     : String(year)
 
   // null means auto-classify from description keywords
-  const credit = isCredit === null ? classifyByDescription(description) : !!isCredit
+  const credit = isCredit === null ? keywordOverride(description, false) : !!isCredit
 
   return {
     date: `${yyyy}-${mm}-${dd}`,
