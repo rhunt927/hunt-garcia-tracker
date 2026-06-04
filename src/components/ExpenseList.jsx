@@ -3,12 +3,12 @@ import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft 
 import { format, parseISO } from 'date-fns'
 import { toTitleCase } from '../lib/utils'
 
-export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onEdit, onDelete, onBulkDelete, onImportCSV, onBack }) {
+export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onEdit, onDelete, onBulkDelete, onImportCSV, onBack, initialFrom, initialTo, initialFilterType }) {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
-  const [filterType, setFilterType] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [filterType, setFilterType] = useState(initialFilterType || 'all')
+  const [dateFrom, setDateFrom] = useState(initialFrom || '')
+  const [dateTo, setDateTo] = useState(initialTo || '')
   const [selected, setSelected] = useState(new Set())
 
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
@@ -19,7 +19,11 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
       [e.merchant, e.description, e.notes, e.category, e.payment_method]
         .some(v => v?.toLowerCase().includes(search.toLowerCase()))
     const matchesCategory = filterCategory === 'all' || e.category === filterCategory
-    const matchesType = filterType === 'all' || e.type === filterType
+    const matchesType = filterType === 'all'
+      ? true
+      : filterType === '__income__' ? incomeTypeNames.has(e.type)
+      : filterType === '__expense__' ? (!incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
+      : e.type === filterType
     const matchesFrom = !dateFrom || e.date >= dateFrom
     const matchesTo = !dateTo || e.date <= dateTo
     return matchesSearch && matchesCategory && matchesType && matchesFrom && matchesTo
@@ -83,6 +87,8 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
           className="bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
         >
           <option value="all">All types</option>
+          <option value="__income__">All Income</option>
+          <option value="__expense__">All Expenses</option>
           {(transactionTypes ?? []).map(t => (
             <option key={t.name} value={t.name}>{t.name}</option>
           ))}
@@ -201,6 +207,7 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
               expense={e}
               selected={selected.has(e.id)}
               isIncome={incomeTypeNames.has(e.type)}
+              isTransfer={transferTypeNames.has(e.type)}
               onToggle={() => toggleOne(e.id)}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -212,11 +219,11 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   )
 }
 
-function ExpenseRow({ expense: e, selected, isIncome, onToggle, onEdit, onDelete }) {
+function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEdit, onDelete }) {
   let dateLabel = e.date
   try { dateLabel = format(parseISO(e.date), 'MMM d, yyyy') } catch {}
 
-  const amountColor = isIncome ? 'text-green-400' : 'text-red-400'
+  const amountColor = isIncome ? 'text-green-400' : isTransfer ? 'text-gray-400' : 'text-red-400'
   const amountPrefix = isIncome ? '+' : ''
 
   return (
@@ -237,7 +244,11 @@ function ExpenseRow({ expense: e, selected, isIncome, onToggle, onEdit, onDelete
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs text-gray-500">{dateLabel}</span>
           {e.type && e.type !== 'expense' && (
-            <span className={`text-xs px-1.5 py-0.5 rounded ${isIncome ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              isTransfer ? 'bg-gray-700/50 text-gray-500 border border-gray-600/50' :
+              isIncome   ? 'bg-green-900/50 text-green-400' :
+                           'bg-gray-800 text-gray-400'
+            }`}>
               {e.type}
             </span>
           )}

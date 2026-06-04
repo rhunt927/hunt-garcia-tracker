@@ -15,6 +15,8 @@ export default function App() {
 
   // null = dashboard, 'list' = full list, 'add' = add form, 'csv' = import, expense object = edit form
   const [formState, setFormState] = useState(null)
+  const [returnTo, setReturnTo] = useState(null)
+  const [listFilters, setListFilters] = useState({})
   const [saving, setSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -53,11 +55,12 @@ export default function App() {
         )
       }
       await save()
-      setFormState(null)
+      setFormState(returnTo)
+      setReturnTo(null)
     } finally {
       setSaving(false)
     }
-  }, [formState, run, save])
+  }, [formState, returnTo, run, save])
 
   const handleDelete = useCallback(async (id) => {
     run('DELETE FROM expenses WHERE id=?', [id])
@@ -259,7 +262,7 @@ export default function App() {
                 transactionTypes={transactionTypes}
                 initialValues={formState === 'add' ? null : formState}
                 onSave={handleSave}
-                onCancel={() => setFormState(null)}
+                onCancel={() => { setFormState(returnTo); setReturnTo(null) }}
                 {...categoryProps}
               />
             ) : formState === 'reports' ? (
@@ -274,18 +277,21 @@ export default function App() {
                 expenses={expenses}
                 categories={categories}
                 transactionTypes={transactionTypes}
-                onAdd={() => setFormState('add')}
-                onEdit={(expense) => setFormState(expense)}
+                initialFrom={listFilters.dateFrom}
+                initialTo={listFilters.dateTo}
+                initialFilterType={listFilters.filterType}
+                onAdd={() => { setReturnTo('list'); setFormState('add') }}
+                onEdit={(expense) => { setReturnTo('list'); setFormState(expense) }}
                 onDelete={handleDelete}
                 onBulkDelete={handleBulkDelete}
                 onImportCSV={() => setFormState('csv')}
-                onBack={() => setFormState(null)}
+                onBack={() => { setListFilters({}); setFormState(null) }}
               />
             ) : (
               <Dashboard
                 expenses={expenses}
                 transactionTypes={transactionTypes}
-                onViewList={() => setFormState('list')}
+                onViewList={(filters) => { setListFilters(filters || {}); setFormState('list') }}
                 onAdd={() => setFormState('add')}
                 onImportCSV={() => setFormState('csv')}
                 onViewReports={() => setFormState('reports')}
@@ -302,38 +308,52 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
-  const totalIncome = expenses
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
+  const monthStart = `${y}-${m}-01`
+  const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
+  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' })
+
+  const monthExpenses = expenses.filter(e => e.date?.startsWith(`${y}-${m}`))
+
+  const totalIncome = monthExpenses
     .filter(e => incomeTypeNames.has(e.type))
     .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
 
-  const totalExpenses = expenses
+  const totalExpenses = monthExpenses
     .filter(e => !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
     .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
 
   const net = totalIncome - totalExpenses
 
+  const monthFilters = { dateFrom: monthStart, dateTo: monthEnd }
+
   return (
     <div className="space-y-4">
+      <p className="text-xs text-gray-500 text-center">{monthLabel}</p>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4">
         <button
-          onClick={onViewList}
+          onClick={() => onViewList({ ...monthFilters, filterType: '__income__' })}
           className="bg-green-900/30 hover:bg-green-900/50 border border-green-500/30 rounded-2xl p-5 text-left transition-colors"
         >
           <div className="flex items-center gap-2 text-green-400 mb-2">
             <TrendingUp size={18} />
-            <span className="text-sm font-medium">Total Income</span>
+            <span className="text-sm font-medium">Income</span>
           </div>
           <p className="text-2xl font-bold text-white">${totalIncome.toFixed(2)}</p>
         </button>
 
         <button
-          onClick={onViewList}
+          onClick={() => onViewList({ ...monthFilters, filterType: '__expense__' })}
           className="bg-gray-900/60 hover:bg-gray-900/80 border border-white/10 rounded-2xl p-5 text-left transition-colors"
         >
           <div className="flex items-center gap-2 text-orange-300 mb-2">
             <TrendingDown size={18} />
-            <span className="text-sm font-medium">Total Expenses</span>
+            <span className="text-sm font-medium">Expenses</span>
           </div>
           <p className="text-2xl font-bold text-white">${totalExpenses.toFixed(2)}</p>
         </button>
@@ -357,7 +377,7 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
           <span className="text-xs font-medium">Add</span>
         </button>
         <button
-          onClick={onViewList}
+          onClick={() => onViewList(monthFilters)}
           className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
         >
           <List size={22} />
