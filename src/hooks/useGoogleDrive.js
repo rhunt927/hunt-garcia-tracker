@@ -6,7 +6,12 @@ async function driveRequest(path, options, token) {
     ...options,
     headers: { Authorization: `Bearer ${token}`, ...options?.headers },
   })
-  if (!res.ok) throw new Error(`Drive API error: ${res.status} ${await res.text()}`)
+  if (!res.ok) {
+    const body = await res.text()
+    const err = new Error(`Drive API error: ${res.status} ${body}`)
+    if (res.status === 401 || res.status === 403) err.isAuthError = true
+    throw err
+  }
   return res
 }
 

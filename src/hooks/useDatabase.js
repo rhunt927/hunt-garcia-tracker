@@ -132,7 +132,7 @@ function createSchema(db) {
   }
 }
 
-export function useDatabase(accessToken) {
+export function useDatabase(accessToken, onAuthError) {
   const [db, setDb] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -159,7 +159,12 @@ export function useDatabase(accessToken) {
         const newFileId = await saveDatabase(accessToken, folderId, fileId ?? null, database.export())
         if (!cancelled) driveRef.current.fileId = newFileId
       } catch (e) {
-        if (!cancelled) setError(e.message)
+        if (cancelled) return
+        if (e.isAuthError) {
+          onAuthError?.()  // stale/invalid token — clear session and show login
+        } else {
+          setError(e.message)
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
