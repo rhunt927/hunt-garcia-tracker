@@ -6,9 +6,9 @@ const MIN_WIDTH = 260
 const MAX_WIDTH = 600
 const DEFAULT_WIDTH = 288
 
-export function SettingsSidebar({ open, onClose, categories, budgets, paymentMethods, exchangeRates,
+export function SettingsSidebar({ open, onClose, categories, paymentMethods, exchangeRates,
   transactionTypes, user, onLogout,
-  onAddCategory, onRenameCategory, onDeleteCategory, onSetBudget, onDeleteBudget,
+  onAddCategory, onRenameCategory, onDeleteCategory,
   onAddPaymentMethod, onRenamePaymentMethod, onDeletePaymentMethod,
   onUpdateExchangeRate, onDeleteExchangeRate,
   onAddTransactionType, onRenameTransactionType, onDeleteTransactionType, onToggleTransactionTypeIncome,
@@ -80,14 +80,12 @@ export function SettingsSidebar({ open, onClose, categories, budgets, paymentMet
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
 
           <Section title="Categories" sectionKey="categories" collapsed={collapsed.has('categories')} onToggle={() => toggleSection('categories')}>
-            <CategoryBudgetList
+            <ManageList
               items={categories}
-              budgets={budgets}
               onAdd={onAddCategory}
               onRename={onRenameCategory}
               onDelete={onDeleteCategory}
-              onSetBudget={onSetBudget}
-              onDeleteBudget={onDeleteBudget}
+              placeholder="New category"
             />
           </Section>
 
@@ -151,174 +149,6 @@ function Section({ title, collapsed, onToggle, children }) {
         />
       </button>
       {!collapsed && <div className="pb-4">{children}</div>}
-    </div>
-  )
-}
-
-function CategoryBudgetList({ items, budgets, onAdd, onRename, onDelete, onSetBudget, onDeleteBudget }) {
-  const [newName, setNewName] = useState('')
-
-  // Group budgets by category: { "Dining": [{year, monthly_limit}, ...], ... }
-  const budgetsByCategory = {}
-  ;(budgets ?? []).forEach(b => {
-    if (!budgetsByCategory[b.category]) budgetsByCategory[b.category] = []
-    budgetsByCategory[b.category].push(b)
-  })
-
-  function handleAdd() {
-    const name = newName.trim()
-    if (!name || items.includes(name)) return
-    onAdd(name)
-    setNewName('')
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {items.map(item => (
-        <CategoryBudgetRow
-          key={item}
-          name={item}
-          budgetsForCategory={budgetsByCategory[item] ?? []}
-          onRename={n => onRename(item, n)}
-          onDelete={() => onDelete(item)}
-          onSetBudget={onSetBudget}
-          onDeleteBudget={onDeleteBudget}
-        />
-      ))}
-      <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
-        <input
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="New category"
-          className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={!newName.trim()}
-          className="p-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 rounded-lg transition-colors"
-        >
-          <Plus size={16} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function CategoryBudgetRow({ name, budgetsForCategory, onRename, onDelete, onSetBudget, onDeleteBudget }) {
-  const currentYear = new Date().getFullYear()
-  const [editing, setEditing] = useState(false)
-  const [nameVal, setNameVal] = useState(name)
-  const [budgetYear, setBudgetYear] = useState(currentYear)
-  const [budgetAmount, setBudgetAmount] = useState('')
-
-  function openEdit() {
-    setNameVal(name)
-    const yr = currentYear
-    setBudgetYear(yr)
-    const existing = budgetsForCategory.find(b => b.year === yr)
-    setBudgetAmount(existing ? String(existing.monthly_limit) : '')
-    setEditing(true)
-  }
-
-  function handleYearChange(yr) {
-    setBudgetYear(yr)
-    const existing = budgetsForCategory.find(b => b.year === yr)
-    setBudgetAmount(existing ? String(existing.monthly_limit) : '')
-  }
-
-  function save() {
-    const trimmed = nameVal.trim()
-    if (trimmed && trimmed !== name) onRename(trimmed)
-    const amount = parseFloat(budgetAmount)
-    if (!isNaN(amount) && amount > 0) onSetBudget(trimmed || name, budgetYear, amount)
-    setEditing(false)
-  }
-
-  const hasExistingBudgetForYear = !!budgetsForCategory.find(b => b.year === budgetYear)
-
-  return (
-    <div className="rounded-lg">
-      {editing ? (
-        <div className="bg-gray-900/60 border border-white/10 rounded-xl px-3 py-3 space-y-3 my-1">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Category Name</label>
-            <input
-              autoFocus
-              value={nameVal}
-              onChange={e => setNameVal(e.target.value)}
-              onKeyDown={e => e.key === 'Escape' && setEditing(false)}
-              className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Monthly Budget ($)</label>
-              <input
-                type="number"
-                value={budgetAmount}
-                onChange={e => setBudgetAmount(e.target.value)}
-                placeholder="No limit"
-                min="0"
-                step="10"
-                className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Year</label>
-              <input
-                type="number"
-                value={budgetYear}
-                onChange={e => handleYearChange(parseInt(e.target.value) || currentYear)}
-                min="2020"
-                max="2099"
-                className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={save}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg py-2 text-sm font-medium transition-colors"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="flex-1 bg-gray-800 hover:bg-gray-700 rounded-lg py-2 text-sm font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            {hasExistingBudgetForYear && (
-              <button
-                onClick={() => { onDeleteBudget(name, budgetYear); setEditing(false) }}
-                className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-start gap-2 px-2 py-1.5 hover:bg-white/5 rounded-lg">
-          <div className="flex-1 min-w-0">
-            <span className="text-sm text-gray-300">{name}</span>
-            {budgetsForCategory.length > 0 && (
-              <div className="flex gap-2 flex-wrap mt-0.5">
-                {budgetsForCategory.sort((a, b) => a.year - b.year).map(b => (
-                  <span key={b.year} className="text-xs text-blue-400/70">{b.year}: ${b.monthly_limit}/mo</span>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={openEdit} className="text-gray-500 hover:text-white transition-colors shrink-0 mt-0.5">
-            <Pencil size={13} />
-          </button>
-          <button onClick={onDelete} className="text-gray-500 hover:text-red-400 transition-colors shrink-0 mt-0.5">
-            <Trash2 size={13} />
-          </button>
-        </div>
-      )}
     </div>
   )
 }

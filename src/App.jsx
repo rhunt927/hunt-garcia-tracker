@@ -1,6 +1,7 @@
 import { useState, useCallback, Component } from 'react'
-import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
 import { Reports } from './components/Reports'
+import { Budget } from './components/Budget'
 import { useAuth } from './hooks/useAuth'
 import { useDatabase } from './hooks/useDatabase'
 import { LoginScreen } from './components/LoginScreen'
@@ -238,15 +239,12 @@ export default function App() {
         user={user}
         onLogout={logout}
         categories={categories}
-        budgets={budgets}
         paymentMethods={paymentMethods}
         exchangeRates={exchangeRates}
         transactionTypes={transactionTypes}
         onAddCategory={handleAddCategory}
         onRenameCategory={handleRenameCategory}
         onDeleteCategory={handleDeleteCategory}
-        onSetBudget={handleSetBudget}
-        onDeleteBudget={handleDeleteBudget}
         onAddPaymentMethod={handleAddPaymentMethod}
         onRenamePaymentMethod={handleRenamePaymentMethod}
         onDeletePaymentMethod={handleDeletePaymentMethod}
@@ -312,6 +310,14 @@ export default function App() {
                 onCancel={() => { setFormState(returnTo); setReturnTo(null) }}
                 {...categoryProps}
               />
+            ) : formState === 'budget' ? (
+              <Budget
+                categories={categories}
+                budgets={budgets}
+                onSetBudget={handleSetBudget}
+                onDeleteBudget={handleDeleteBudget}
+                onBack={() => setFormState(null)}
+              />
             ) : formState === 'reports' ? (
               <ErrorBoundary key={reportFilters.dateFrom}>
                 <Reports
@@ -351,6 +357,7 @@ export default function App() {
                 onAdd={() => setFormState('add')}
                 onImportCSV={() => setFormState('csv')}
                 onViewReports={(filters) => { setReportFilters(filters || {}); setFormState('reports') }}
+                onViewBudget={() => setFormState('budget')}
               />
             )}
           </>
@@ -360,7 +367,7 @@ export default function App() {
   )
 }
 
-function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports }) {
+function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
@@ -485,35 +492,46 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
       })()}
 
       {/* Actions */}
-      <div className="grid grid-cols-2 gap-3 pt-2">
-        <button
-          onClick={onAdd}
-          className="flex flex-col items-center gap-2 bg-blue-600 hover:bg-blue-700 rounded-xl py-4 transition-colors"
-        >
-          <Plus size={22} />
-          <span className="text-xs font-medium">Add</span>
-        </button>
-        <button
-          onClick={() => onViewList(monthFilters)}
-          className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
-        >
-          <List size={22} />
-          <span className="text-xs font-medium">Transactions</span>
-        </button>
-        <button
-          onClick={() => onViewReports(monthFilters)}
-          className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
-        >
-          <BarChart2 size={22} />
-          <span className="text-xs font-medium">Reports</span>
-        </button>
-        <button
-          onClick={onImportCSV}
-          className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
-        >
-          <FileUp size={22} />
-          <span className="text-xs font-medium">Import</span>
-        </button>
+      <div className="space-y-3 pt-2">
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={onAdd}
+            className="flex flex-col items-center gap-2 bg-blue-600 hover:bg-blue-700 rounded-xl py-4 transition-colors"
+          >
+            <Plus size={20} />
+            <span className="text-xs font-medium">Add</span>
+          </button>
+          <button
+            onClick={() => onViewList(monthFilters)}
+            className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
+          >
+            <List size={20} />
+            <span className="text-xs font-medium">Transactions</span>
+          </button>
+          <button
+            onClick={() => onViewReports(monthFilters)}
+            className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
+          >
+            <BarChart2 size={20} />
+            <span className="text-xs font-medium">Reports</span>
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={onViewBudget}
+            className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
+          >
+            <Wallet size={20} />
+            <span className="text-xs font-medium">Budget</span>
+          </button>
+          <button
+            onClick={onImportCSV}
+            className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
+          >
+            <FileUp size={20} />
+            <span className="text-xs font-medium">Import</span>
+          </button>
+        </div>
       </div>
     </div>
   )
