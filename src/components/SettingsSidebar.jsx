@@ -221,7 +221,12 @@ function TransactionTypeList({ types, onAdd, onRename, onDelete, onToggleIncome 
           type={t}
           onRename={newName => onRename(t.name, newName)}
           onDelete={() => onDelete(t.name)}
-          onToggleIncome={() => onToggleIncome(t.name, t.is_income ? 0 : 1)}
+          onToggleIncome={() => {
+              // Cycle: Expense → Income → Transfer → Expense
+              if (t.is_transfer) onToggleIncome(t.name, 0, 0)        // transfer → expense
+              else if (t.is_income) onToggleIncome(t.name, 0, 1)     // income → transfer
+              else onToggleIncome(t.name, 1, 0)                      // expense → income
+            }}
         />
       ))}
       <div className="flex gap-2 mt-2 pt-2 border-t border-white/5 items-center">
@@ -289,16 +294,23 @@ function TransactionTypeRow({ type, onRename, onDelete, onToggleIncome }) {
       <button
         type="button"
         onClick={onToggleIncome}
-        className={`flex items-center gap-1 text-xs cursor-pointer shrink-0 ${type.is_income ? 'text-green-400' : 'text-red-400'}`}
-        title="Toggle income/expense"
+        className={`flex items-center gap-1 text-xs cursor-pointer shrink-0 ${
+          type.is_transfer ? 'text-gray-400' : type.is_income ? 'text-green-400' : 'text-red-400'
+        }`}
+        title="Click to cycle: Expense → Income → Transfer"
       >
-        <span className={`inline-flex w-4 h-4 rounded border-2 items-center justify-center shrink-0 ${type.is_income ? 'bg-green-500 border-green-500' : 'bg-red-500/20 border-red-500'}`}>
-          {type.is_income
-            ? <Check size={9} className="text-white" strokeWidth={3} />
-            : <X size={9} className="text-red-400" strokeWidth={3} />
+        <span className={`inline-flex w-4 h-4 rounded border-2 items-center justify-center shrink-0 ${
+          type.is_transfer ? 'bg-gray-600 border-gray-500' :
+          type.is_income  ? 'bg-green-500 border-green-500' : 'bg-red-500/20 border-red-500'
+        }`}>
+          {type.is_transfer
+            ? <span className="text-gray-300 text-[8px] font-bold leading-none">⇄</span>
+            : type.is_income
+              ? <Check size={9} className="text-white" strokeWidth={3} />
+              : <X size={9} className="text-red-400" strokeWidth={3} />
           }
         </span>
-        {type.is_income ? 'Income' : 'Expense'}
+        {type.is_transfer ? 'Transfer' : type.is_income ? 'Income' : 'Expense'}
       </button>
       <button onClick={() => { setVal(type.name); setEditing(true) }} className="text-gray-500 hover:text-white transition-colors">
         <Pencil size={13} />

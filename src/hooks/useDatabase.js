@@ -12,10 +12,10 @@ const DEFAULT_PAYMENT_METHODS = [
 ]
 const DEFAULT_EXCHANGE_RATES = { PAB: 1.00, EUR: 1.08 }
 const DEFAULT_TRANSACTION_TYPES = [
-  { name: 'Expense', is_income: 0 },
-  { name: 'Income', is_income: 1 },
-  { name: 'Transfer', is_income: 0 },
-  { name: 'Reimbursement', is_income: 1 },
+  { name: 'Expense', is_income: 0, is_transfer: 0 },
+  { name: 'Income', is_income: 1, is_transfer: 0 },
+  { name: 'Transfer', is_income: 0, is_transfer: 1 },
+  { name: 'Reimbursement', is_income: 1, is_transfer: 0 },
 ]
 
 // Maps old underscore/lowercase names → new display names
@@ -86,6 +86,9 @@ function createSchema(db) {
 
   // Column migrations
   try { db.run('ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT "Expense"') } catch {}
+  try { db.run('ALTER TABLE transaction_types ADD COLUMN is_transfer INTEGER DEFAULT 0') } catch {}
+  // Mark Transfer type as neutral (not income, not expense)
+  db.run("UPDATE transaction_types SET is_transfer=1, is_income=0 WHERE name='Transfer'")
 
   // Seed defaults on first run
   const existingCats = db.exec('SELECT COUNT(*) FROM categories')[0]?.values[0][0]
@@ -100,7 +103,7 @@ function createSchema(db) {
   const existingTypes = db.exec('SELECT COUNT(*) FROM transaction_types')[0]?.values[0][0]
   if (!existingTypes) {
     DEFAULT_TRANSACTION_TYPES.forEach(t =>
-      db.run('INSERT OR IGNORE INTO transaction_types VALUES (?, ?)', [t.name, t.is_income])
+      db.run('INSERT OR IGNORE INTO transaction_types VALUES (?, ?, ?)', [t.name, t.is_income, t.is_transfer])
     )
   }
 

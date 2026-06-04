@@ -110,9 +110,11 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
                 onClick={() => set('type', t.name)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                   form.type === t.name
-                    ? t.is_income
-                      ? 'bg-green-600/30 border-green-500 text-green-300'
-                      : 'bg-blue-600/30 border-blue-500 text-blue-300'
+                    ? t.is_transfer
+                      ? 'bg-gray-600/30 border-gray-500 text-gray-300'
+                      : t.is_income
+                        ? 'bg-green-600/30 border-green-500 text-green-300'
+                        : 'bg-blue-600/30 border-blue-500 text-blue-300'
                     : 'bg-gray-800 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >

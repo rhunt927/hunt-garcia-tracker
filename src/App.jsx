@@ -23,7 +23,7 @@ export default function App() {
   const exchangeRates = db
     ? Object.fromEntries(query('SELECT currency, rate FROM exchange_rates').map(r => [r.currency, r.rate]))
     : {}
-  const transactionTypes = db ? query('SELECT name, is_income FROM transaction_types ORDER BY is_income, name') : []
+  const transactionTypes = db ? query('SELECT name, is_income, is_transfer FROM transaction_types ORDER BY is_income, name') : []
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
 
   const handleSave = useCallback(async (expense) => {
@@ -130,8 +130,8 @@ export default function App() {
     await save()
   }, [run, save])
 
-  const handleToggleTransactionTypeIncome = useCallback(async (name, is_income) => {
-    run('UPDATE transaction_types SET is_income=? WHERE name=?', [is_income, name])
+  const handleToggleTransactionTypeIncome = useCallback(async (name, is_income, is_transfer = 0) => {
+    run('UPDATE transaction_types SET is_income=?, is_transfer=? WHERE name=?', [is_income, is_transfer, name])
     await save()
   }, [run, save])
 
@@ -299,14 +299,15 @@ export default function App() {
 }
 
 function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV, onViewReports }) {
-  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income).map(t => t.name))
+  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
+  const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
   const totalIncome = expenses
     .filter(e => incomeTypeNames.has(e.type))
     .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
 
   const totalExpenses = expenses
-    .filter(e => !incomeTypeNames.has(e.type))
+    .filter(e => !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
     .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
 
   const net = totalIncome - totalExpenses

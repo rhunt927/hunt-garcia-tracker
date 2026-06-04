@@ -18,7 +18,8 @@ export function Reports({ expenses, transactionTypes, categories, onBack }) {
   const [groupBy, setGroupBy] = useState('category') // 'category' | 'type'
   const [chartType, setChartType] = useState('pie') // 'bar' | 'pie'
 
-  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income).map(t => t.name))
+  const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
+  const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
   const filtered = useMemo(() => {
     const from = parseISO(dateFrom)
@@ -31,7 +32,7 @@ export function Reports({ expenses, transactionTypes, categories, onBack }) {
   }, [expenses, dateFrom, dateTo])
 
   const totalIncome = filtered.filter(e => incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
-  const totalExpenses = filtered.filter(e => !incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+  const totalExpenses = filtered.filter(e => !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
   const net = totalIncome - totalExpenses
 
   // Monthly bar chart data
@@ -78,7 +79,7 @@ export function Reports({ expenses, transactionTypes, categories, onBack }) {
       const key = e.category || 'Other'
       if (!map[key]) map[key] = { income: 0, expenses: 0 }
       if (incomeTypeNames.has(e.type)) map[key].income += e.amount_usd ?? 0
-      else map[key].expenses += e.amount_usd ?? 0
+      else if (!transferTypeNames.has(e.type)) map[key].expenses += e.amount_usd ?? 0
     })
     return Object.entries(map)
       .map(([cat, { income, expenses }]) => ({ cat, income, expenses, net: income - expenses }))
