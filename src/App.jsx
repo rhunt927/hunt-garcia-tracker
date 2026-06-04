@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, Component } from 'react'
 import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Reports } from './components/Reports'
 import { useAuth } from './hooks/useAuth'
@@ -8,6 +8,21 @@ import { ExpenseForm } from './components/ExpenseForm'
 import { ExpenseList } from './components/ExpenseList'
 import { CSVImport } from './components/CSVImport'
 import { SettingsSidebar } from './components/SettingsSidebar'
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(e) { return { error: e } }
+  render() {
+    if (this.state.error) return (
+      <div className="bg-red-900/40 border border-red-500/30 rounded-xl p-5 text-sm text-red-300 space-y-2">
+        <p className="font-semibold text-red-200">Something went wrong loading this view.</p>
+        <p className="font-mono text-xs break-all">{this.state.error.message}</p>
+        <button onClick={() => this.setState({ error: null })} className="text-xs text-red-400 underline">Try again</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 export default function App() {
   const { user, accessToken, loading, gisReady, login, logout, clearAuth } = useAuth()
@@ -277,14 +292,16 @@ export default function App() {
                 {...categoryProps}
               />
             ) : formState === 'reports' ? (
-              <Reports
-                expenses={expenses}
-                transactionTypes={transactionTypes}
-                categories={categories}
-                initialFrom={reportFilters.dateFrom}
-                initialTo={reportFilters.dateTo}
-                onBack={() => { setReportFilters({}); setFormState(null) }}
-              />
+              <ErrorBoundary key={reportFilters.dateFrom}>
+                <Reports
+                  expenses={expenses}
+                  transactionTypes={transactionTypes}
+                  categories={categories}
+                  initialFrom={reportFilters.dateFrom}
+                  initialTo={reportFilters.dateTo}
+                  onBack={() => { setReportFilters({}); setFormState(null) }}
+                />
+              </ErrorBoundary>
             ) : formState === 'list' ? (
               <ExpenseList
                 expenses={expenses}

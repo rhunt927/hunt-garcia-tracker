@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { ChevronLeft, Download, BarChart2, PieChart as PieIcon } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -17,6 +17,17 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
   const [dateTo, setDateTo] = useState(initialTo ?? format(endOfMonth(today), 'yyyy-MM-dd'))
   const [groupBy, setGroupBy] = useState('category') // 'category' | 'type'
   const [chartType, setChartType] = useState('pie') // 'bar' | 'pie'
+  const [chartReady, setChartReady] = useState(false)
+  const chartRef = useRef(null)
+
+  useEffect(() => {
+    if (!chartRef.current) return
+    const ro = new ResizeObserver(entries => {
+      if (entries[0]?.contentRect.width > 0) setChartReady(true)
+    })
+    ro.observe(chartRef.current)
+    return () => ro.disconnect()
+  }, [])
 
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
@@ -181,51 +192,53 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
           </div>
         </div>
 
-        {chartData.length === 0 ? (
-          <p className="text-center text-gray-500 text-sm py-10">No transactions in this date range.</p>
-        ) : chartType === 'bar' ? (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `$${v}`} />
-              <Tooltip
-                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
-                labelStyle={{ color: '#f3f4f6' }}
-                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, name]}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              {keys.map((key, i) => (
-                <Bar key={key} dataKey={key} stackId="a" fill={COLORS[i % COLORS.length]}
-                  radius={i === keys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={65}
-                outerRadius={110}
-                paddingAngle={2}
-                dataKey="value"
-                label={({ name, percent }) => percent >= 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : null}
-                labelLine={({ percent }) => percent >= 0.05 ? { stroke: '#6b7280' } : false}
-              >
-                {pieData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+        <div ref={chartRef}>
+          {chartData.length === 0 ? (
+            <p className="text-center text-gray-500 text-sm py-10">No transactions in this date range.</p>
+          ) : !chartReady ? null : chartType === 'bar' ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                <Tooltip
+                  contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                  labelStyle={{ color: '#f3f4f6' }}
+                  formatter={(value, name) => [`$${Number(value).toFixed(2)}`, name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {keys.map((key, i) => (
+                  <Bar key={key} dataKey={key} stackId="a" fill={COLORS[i % COLORS.length]}
+                    radius={i === keys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
                 ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
-                formatter={(value) => [`$${Number(value).toFixed(2)}`]}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={65}
+                  outerRadius={110}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={({ name, percent }) => percent >= 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : null}
+                  labelLine={({ percent }) => percent >= 0.05 ? { stroke: '#6b7280' } : null}
+                >
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                  formatter={(value) => [`$${Number(value).toFixed(2)}`]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* Category breakdown table */}
