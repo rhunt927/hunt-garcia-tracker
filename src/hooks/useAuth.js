@@ -3,11 +3,10 @@ import { useState, useEffect, useCallback } from 'react'
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file profile email'
 
-// sessionStorage: token survives refreshes in same tab, gone when browser closes
-// localStorage: profile survives across browser restarts (no token, just name/email/picture)
+// localStorage: token and profile both persist until explicit sign-out
 function loadSession() {
   try {
-    const token = sessionStorage.getItem('et_token')
+    const token = localStorage.getItem('et_token')
     const user = JSON.parse(localStorage.getItem('et_user') || 'null')
     // Drop any previously stored invalid base64 picture
     if (user?.picture?.startsWith('data:')) user.picture = null
@@ -16,12 +15,12 @@ function loadSession() {
 }
 
 function saveSession(user, token) {
-  sessionStorage.setItem('et_token', token)
+  localStorage.setItem('et_token', token)
   localStorage.setItem('et_user', JSON.stringify(user))
 }
 
 function clearSession() {
-  sessionStorage.removeItem('et_token')
+  localStorage.removeItem('et_token')
   localStorage.removeItem('et_user')
 }
 
