@@ -98,13 +98,18 @@ function parseStatementLines(lines, bank) {
     if (m) { year = parseInt(m[1]); break }
   }
 
-  // First pass: section-aware (tag rows as debit or credit based on section)
-  const rows = parseSectionAware(lines, bank, year)
+  // Pass 1: strict section-aware (header must be at start of line)
+  let rows = parseSectionAware(lines, bank, year, false)
 
-  // Fallback: if section headers didn't match, scan all lines as debits
+  // Pass 2: loose section-aware (header anywhere in line — handles indented/wrapped headers)
+  if (rows.length === 0) {
+    rows = parseSectionAware(lines, bank, year, true)
+  }
+
+  // Pass 3: no section detection — scan all lines, classify credit vs debit by description keywords
   if (rows.length === 0) {
     for (const line of lines) {
-      const parsed = parseTxnLine(line, year, bank, false)
+      const parsed = parseTxnLine(line, year, bank, null)  // null = auto-classify
       if (parsed) rows.push(parsed)
     }
   }
@@ -116,14 +121,23 @@ function parseStatementLines(lines, bank) {
   return { rows, bankName: `${bank.name} (PDF)` }
 }
 
-function parseSectionAware(lines, bank, year) {
+function parseSectionAware(lines, bank, year, loose) {
   const rows = []
-  let sectionType = null  // null | 'debit' | 'credit' — start null, require explicit entry
+  let sectionType = null
+
+  // In loose mode, strip ^ so the header can appear anywhere in the line
+  function makeLoose(re) {
+    if (!re) return null
+    return new RegExp(re.source.replace(/^\^/, ''), re.flags)
+  }
+  const creditRe = loose ? makeLoose(bank.creditSection) : bank.creditSection
+  const debitRe  = loose ? makeLoose(bank.debitSection)  : bank.debitSection
+  const skipRe   = loose ? makeLoose(bank.skipSection)   : bank.skipSection
 
   for (const line of lines) {
-    if (bank.skipSection?.test(line))   { sectionType = null;     continue }
-    if (bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
-    if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
+    if (skipRe?.test(line))   { sectionType = null;     continue }
+    if (creditRe?.test(line)) { sectionType = 'credit'; continue }
+    if (debitRe?.test(line))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
     const parsed = parseTxnLine(line, year, bank, sectionType === 'credit')
@@ -133,9 +147,20 @@ function parseSectionAware(lines, bank, year) {
   return rows
 }
 
+// Classify a transaction description as credit or debit using keywords,
+// for when section headers aren't available.
+function classifyByDescription(description) {
+  // Explicit debit keywords
+  if (/\b(withdrawal|debit card|debit purchase|ach debit|check paid)\b/i.test(description)) return false
+  // Explicit credit keywords (but not "credit card" purchases)
+  if (/\bcredit\b/i.test(description) && !/\bcredit\s+card\b/i.test(description)) return true
+  if (/\b(deposit|refund|incoming|received|reimbursement)\b/i.test(description)) return true
+  // Default to debit
+  return false
+}
+
 // Parse a single transaction line.
-// For debits: first positive amount on line = txn amount (running balance after it is ignored).
-// For credits: same approach; take absolute value in case some banks use negatives in credit sections.
+// isCredit: true/false from section context, or null to auto-classify from description keywords.
 function parseTxnLine(line, year, bank, isCredit) {
   const dateMatch = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)/)
   if (!dateMatch) return null
@@ -166,6 +191,9 @@ function parseTxnLine(line, year, bank, isCredit) {
     ? (parts[2].length === 2 ? '20' + parts[2] : parts[2])
     : String(year)
 
+  // null means auto-classify from description keywords
+  const credit = isCredit === null ? classifyByDescription(description) : !!isCredit
+
   return {
     date: `${yyyy}-${mm}-${dd}`,
     merchant: description,
@@ -176,6 +204,6 @@ function parseTxnLine(line, year, bank, isCredit) {
     category: null,
     payment_method: bank.paymentMethod,
     source: bank.source,
-    isCredit: !!isCredit,
+    isCredit: credit,
   }
 }
