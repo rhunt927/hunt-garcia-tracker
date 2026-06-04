@@ -158,7 +158,15 @@ export default function App() {
         )
       }
       await save()
-      setFormState(null)
+      // After import, jump to the list filtered to the imported date range
+      // so the user can see what was just imported regardless of current month
+      if (rows.length > 0) {
+        const dates = rows.map(e => e.date).filter(Boolean).sort()
+        setListFilters({ dateFrom: dates[0], dateTo: dates[dates.length - 1] })
+        setFormState('list')
+      } else {
+        setFormState(null)
+      }
     } finally {
       setSaving(false)
     }
