@@ -10,6 +10,13 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   const [dateFrom, setDateFrom] = useState(initialFrom || '')
   const [dateTo, setDateTo] = useState(initialTo || '')
   const [selected, setSelected] = useState(new Set())
+  const [sortBy, setSortBy] = useState('date')
+  const [sortDir, setSortDir] = useState('desc')
+
+  function toggleSort(field) {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(field); setSortDir('asc') }
+  }
 
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
@@ -27,6 +34,12 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
     const matchesFrom = !dateFrom || e.date >= dateFrom
     const matchesTo = !dateTo || e.date <= dateTo
     return matchesSearch && matchesCategory && matchesType && matchesFrom && matchesTo
+  }).sort((a, b) => {
+    let cmp = 0
+    if (sortBy === 'date') cmp = (a.date ?? '').localeCompare(b.date ?? '')
+    else if (sortBy === 'category') cmp = (a.category ?? '').localeCompare(b.category ?? '')
+    else if (sortBy === 'type') cmp = (a.type ?? '').localeCompare(b.type ?? '')
+    return sortDir === 'asc' ? cmp : -cmp
   })
 
   const totalIncome = filtered.filter(e => incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
@@ -191,6 +204,22 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sort bar */}
+      {filtered.length > 0 && (
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <span className="mr-1">Sort:</span>
+          {[['date', 'Date'], ['category', 'Category'], ['type', 'Type']].map(([field, label]) => (
+            <button
+              key={field}
+              onClick={() => toggleSort(field)}
+              className={`px-2 py-1 rounded transition-colors ${sortBy === field ? 'text-white bg-gray-700' : 'hover:text-white'}`}
+            >
+              {label} {sortBy === field ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+            </button>
+          ))}
         </div>
       )}
 

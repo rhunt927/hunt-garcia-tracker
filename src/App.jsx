@@ -20,6 +20,8 @@ export default function App() {
   const [reportFilters, setReportFilters] = useState({})
   const [saving, setSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [dashboardYear, setDashboardYear] = useState(() => new Date().getFullYear())
+  const [dashboardMonth, setDashboardMonth] = useState(() => new Date().getMonth())
 
   const categories = db ? query('SELECT name FROM categories ORDER BY name').map(r => r.name) : []
   const paymentMethods = db ? query('SELECT name FROM payment_methods ORDER BY name').map(r => r.name) : []
@@ -302,6 +304,10 @@ export default function App() {
               <Dashboard
                 expenses={expenses}
                 transactionTypes={transactionTypes}
+                selectedYear={dashboardYear}
+                selectedMonth={dashboardMonth}
+                setSelectedYear={setDashboardYear}
+                setSelectedMonth={setDashboardMonth}
                 onViewList={(filters) => { setListFilters(filters || {}); setFormState('list') }}
                 onAdd={() => setFormState('add')}
                 onImportCSV={() => setFormState('csv')}
@@ -315,13 +321,11 @@ export default function App() {
   )
 }
 
-function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV, onViewReports }) {
+function Dashboard({ expenses, transactionTypes, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
   const now = new Date()
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()) // 0-indexed
 
   function prevMonth() {
     if (selectedMonth === 0) { setSelectedYear(y => y - 1); setSelectedMonth(11) }
