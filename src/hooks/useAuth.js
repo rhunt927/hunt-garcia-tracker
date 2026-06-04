@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file profile email'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly profile email'
 
 // localStorage: token and profile both persist until explicit sign-out
 function loadSession() {
@@ -85,12 +85,15 @@ export function useAuth() {
     tokenClient.requestAccessToken()
   }, [])
 
-  // Called by the user via the Sign Out button — revokes the token with Google
+  // Called by the user via the Sign Out button
   function logout() {
-    window.google?.accounts?.oauth2?.revoke(accessToken)
+    const token = accessToken
+    // Clear state first so the UI immediately shows the login screen
     clearSession()
     setUser(null)
     setAccessToken(null)
+    // Best-effort revoke in the background — don't block or redirect
+    try { window.google?.accounts?.oauth2?.revoke(token, () => {}) } catch {}
   }
 
   // Called automatically when Drive returns 401/403 — clears stale token WITHOUT

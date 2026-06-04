@@ -1,7 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+// Use the bundled worker as a blob URL — avoids iOS PWA issues with external ?url workers
+try {
+  const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+} catch {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+}
 
 // Returns { rows, bankName } or throws
 export async function parsePDF(file) {

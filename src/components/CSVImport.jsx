@@ -69,6 +69,9 @@ export function CSVImport({
         `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc&pageSize=50`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('Drive access needs to be refreshed — please sign out and sign back in, then try again.')
+      }
       if (!res.ok) throw new Error('Could not load Drive files')
       const { files } = await res.json()
       setDriveFiles(files)
