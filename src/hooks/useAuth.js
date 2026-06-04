@@ -60,6 +60,7 @@ export function useAuth() {
   }, [])
 
   const login = useCallback(() => {
+    if (!window.google?.accounts?.oauth2) return
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: DRIVE_SCOPE,
@@ -79,6 +80,7 @@ export function useAuth() {
     tokenClient.requestAccessToken()
   }, [])
 
+  // Called by the user via the Sign Out button — revokes the token with Google
   function logout() {
     window.google?.accounts?.oauth2?.revoke(accessToken)
     clearSession()
@@ -86,5 +88,13 @@ export function useAuth() {
     setAccessToken(null)
   }
 
-  return { user, accessToken, loading, login, logout }
+  // Called automatically when Drive returns 401/403 — clears stale token WITHOUT
+  // revoking it (revoking a stale token can block the next sign-in attempt)
+  function clearAuth() {
+    clearSession()
+    setUser(null)
+    setAccessToken(null)
+  }
+
+  return { user, accessToken, loading, login, logout, clearAuth }
 }

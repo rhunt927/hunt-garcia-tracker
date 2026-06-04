@@ -10,8 +10,8 @@ import { CSVImport } from './components/CSVImport'
 import { SettingsSidebar } from './components/SettingsSidebar'
 
 export default function App() {
-  const { user, accessToken, loading, login, logout } = useAuth()
-  const { db, loading: dbLoading, error: dbError, query, run, save } = useDatabase(accessToken, logout)
+  const { user, accessToken, loading, login, logout, clearAuth } = useAuth()
+  const { db, loading: dbLoading, error: dbError, query, run, save } = useDatabase(accessToken, clearAuth)
 
   // null = dashboard, 'list' = full list, 'add' = add form, 'csv' = import, expense object = edit form
   const [formState, setFormState] = useState(null)
