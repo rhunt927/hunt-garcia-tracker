@@ -107,7 +107,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
           <SidebarAvatar user={user} />
           <span className="flex-1 text-sm text-gray-300 truncate">{user?.name || user?.email || 'User'}</span>
           <button
-            onClick={onLogout}
+            onClick={() => { onLogout(); window.close() }}
             className="text-sm text-gray-500 hover:text-red-400 transition-colors whitespace-nowrap"
           >
             Sign out

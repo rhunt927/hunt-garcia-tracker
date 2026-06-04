@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2 } from 'lucide-react'
+import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Reports } from './components/Reports'
 import { useAuth } from './hooks/useAuth'
 import { useDatabase } from './hooks/useDatabase'
@@ -309,12 +309,25 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
   const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()) // 0-indexed
+
+  function prevMonth() {
+    if (selectedMonth === 0) { setSelectedYear(y => y - 1); setSelectedMonth(11) }
+    else setSelectedMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (selectedMonth === 11) { setSelectedYear(y => y + 1); setSelectedMonth(0) }
+    else setSelectedMonth(m => m + 1)
+  }
+
+  const m = String(selectedMonth + 1).padStart(2, '0')
+  const y = selectedYear
+  const lastDay = new Date(y, selectedMonth + 1, 0).getDate()
   const monthStart = `${y}-${m}-01`
   const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
-  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(y, selectedMonth, 1).toLocaleString('default', { month: 'long', year: 'numeric' })
+  const isCurrentMonth = y === now.getFullYear() && selectedMonth === now.getMonth()
 
   const monthExpenses = expenses.filter(e => e.date?.startsWith(`${y}-${m}`))
 
@@ -332,7 +345,24 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-gray-500 text-center">{monthLabel}</p>
+      {/* Month navigator */}
+      <div className="flex items-center justify-between px-1">
+        <button onClick={prevMonth} className="p-1.5 text-gray-400 hover:text-white transition-colors">
+          <ChevronLeft size={22} />
+        </button>
+        <div className="text-center">
+          <p className="text-xl font-semibold text-white">{monthLabel}</p>
+          {!isCurrentMonth && (
+            <button onClick={() => { setSelectedYear(now.getFullYear()); setSelectedMonth(now.getMonth()) }}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-0.5">
+              Back to current month
+            </button>
+          )}
+        </div>
+        <button onClick={nextMonth} className="p-1.5 text-gray-400 hover:text-white transition-colors">
+          <ChevronRight size={22} />
+        </button>
+      </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4">
