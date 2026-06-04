@@ -17,6 +17,7 @@ export default function App() {
   const [formState, setFormState] = useState(null)
   const [returnTo, setReturnTo] = useState(null)
   const [listFilters, setListFilters] = useState({})
+  const [reportFilters, setReportFilters] = useState({})
   const [saving, setSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -278,7 +279,9 @@ export default function App() {
                 expenses={expenses}
                 transactionTypes={transactionTypes}
                 categories={categories}
-                onBack={() => setFormState(null)}
+                initialFrom={reportFilters.dateFrom}
+                initialTo={reportFilters.dateTo}
+                onBack={() => { setReportFilters({}); setFormState(null) }}
               />
             ) : formState === 'list' ? (
               <ExpenseList
@@ -302,7 +305,7 @@ export default function App() {
                 onViewList={(filters) => { setListFilters(filters || {}); setFormState('list') }}
                 onAdd={() => setFormState('add')}
                 onImportCSV={() => setFormState('csv')}
-                onViewReports={() => setFormState('reports')}
+                onViewReports={(filters) => { setReportFilters(filters || {}); setFormState('reports') }}
               />
             )}
           </>
@@ -422,7 +425,7 @@ function Dashboard({ expenses, transactionTypes, onViewList, onAdd, onImportCSV,
           <span className="text-xs font-medium">Transactions</span>
         </button>
         <button
-          onClick={onViewReports}
+          onClick={() => onViewReports(monthFilters)}
           className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
         >
           <BarChart2 size={22} />

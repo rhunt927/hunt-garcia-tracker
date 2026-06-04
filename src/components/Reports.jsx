@@ -11,10 +11,10 @@ const COLORS = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
 ]
 
-export function Reports({ expenses, transactionTypes, categories, onBack }) {
+export function Reports({ expenses, transactionTypes, categories, onBack, initialFrom, initialTo }) {
   const today = new Date()
-  const [dateFrom, setDateFrom] = useState(format(startOfMonth(today), 'yyyy-MM-dd'))
-  const [dateTo, setDateTo] = useState(format(endOfMonth(today), 'yyyy-MM-dd'))
+  const [dateFrom, setDateFrom] = useState(initialFrom ?? format(startOfMonth(today), 'yyyy-MM-dd'))
+  const [dateTo, setDateTo] = useState(initialTo ?? format(endOfMonth(today), 'yyyy-MM-dd'))
   const [groupBy, setGroupBy] = useState('category') // 'category' | 'type'
   const [chartType, setChartType] = useState('pie') // 'bar' | 'pie'
 
