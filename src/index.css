@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.3) brightness(0.6);
+  filter: invert(1) brightness(0.7);
   cursor: pointer;
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  filter: invert(0.6) brightness(0.9);
 }
