@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { X, Plus, Pencil, Trash2, Check } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Check, ChevronDown } from 'lucide-react'
 import { toTitleCase } from '../lib/utils'
 
 const MIN_WIDTH = 260
@@ -15,6 +15,16 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
 }) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef(null)
+  const SECTIONS = ['categories', 'payment_methods', 'transaction_types', 'exchange_rates']
+  const [collapsed, setCollapsed] = useState(new Set())
+
+  function toggleSection(key) {
+    setCollapsed(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const allCollapsed = SECTIONS.every(k => collapsed.has(k))
+  function toggleAll() {
+    setCollapsed(allCollapsed ? new Set() : new Set(SECTIONS))
+  }
 
   const onMouseDown = useCallback((e) => {
     e.preventDefault()
@@ -56,15 +66,20 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <h2 className="font-semibold text-white">Settings</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={toggleAll} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+              {allCollapsed ? 'Expand All' : 'Collapse All'}
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
 
-          <Section title="Categories">
+          <Section title="Categories" sectionKey="categories" collapsed={collapsed.has('categories')} onToggle={() => toggleSection('categories')}>
             <ManageList
               items={categories}
               onAdd={onAddCategory}
@@ -74,7 +89,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
             />
           </Section>
 
-          <Section title="Payment Methods">
+          <Section title="Payment Methods" sectionKey="payment_methods" collapsed={collapsed.has('payment_methods')} onToggle={() => toggleSection('payment_methods')}>
             <ManageList
               items={paymentMethods}
               onAdd={onAddPaymentMethod}
@@ -84,8 +99,8 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
             />
           </Section>
 
-          <Section title="Transaction Types">
-            <p className="text-xs text-gray-500 mb-2">Click the toggle to switch a type between Expense (red) and Income (green).</p>
+          <Section title="Transaction Types" sectionKey="transaction_types" collapsed={collapsed.has('transaction_types')} onToggle={() => toggleSection('transaction_types')}>
+            <p className="text-xs text-gray-500 mb-2">Click the toggle to cycle Expense → Income → Transfer.</p>
             <TransactionTypeList
               types={transactionTypes}
               onAdd={onAddTransactionType}
@@ -95,7 +110,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
             />
           </Section>
 
-          <Section title="Exchange Rates">
+          <Section title="Exchange Rates" sectionKey="exchange_rates" collapsed={collapsed.has('exchange_rates')} onToggle={() => toggleSection('exchange_rates')}>
             <p className="text-xs text-gray-500 mb-2">USD base. Enter how many USD = 1 unit of the currency.</p>
             <ExchangeRateList rates={exchangeRates} onUpdate={onUpdateExchangeRate} onDelete={onDeleteExchangeRate} />
           </Section>
@@ -118,11 +133,22 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
   )
 }
 
-function Section({ title, children }) {
+function Section({ title, collapsed, onToggle, children }) {
   return (
-    <div>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{title}</h3>
-      {children}
+    <div className="border-b border-white/5 last:border-0">
+      <button
+        onClick={onToggle}
+        className="flex items-center justify-between w-full py-3 text-left group"
+      >
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider group-hover:text-gray-300 transition-colors">
+          {title}
+        </h3>
+        <ChevronDown
+          size={14}
+          className={`text-gray-600 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
+        />
+      </button>
+      {!collapsed && <div className="pb-4">{children}</div>}
     </div>
   )
 }
