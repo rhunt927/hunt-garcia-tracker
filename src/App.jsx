@@ -423,7 +423,7 @@ function CashFlowChart({ expenses, incomeTypeNames, transferTypeNames }) {
         {!hasData ? (
           <p className="text-center text-gray-500 text-sm py-8">No transaction data yet.</p>
         ) : !chartReady ? null : (
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={160}>
             <ComposedChart data={data} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
               <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 10 }} />
@@ -531,39 +531,6 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
       {/* Cash flow chart */}
       <CashFlowChart expenses={expenses} incomeTypeNames={incomeTypeNames} transferTypeNames={transferTypeNames} />
 
-      {/* Budget progress */}
-      {budgets?.length > 0 && (() => {
-        const yearBudgets = budgets.filter(b => b.year === selectedYear)
-        if (yearBudgets.length === 0) return null
-        const budgetRows = yearBudgets.map(b => {
-          const spent = monthExpenses
-            .filter(e => e.category === b.category && !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
-            .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
-          const pct = b.monthly_limit > 0 ? spent / b.monthly_limit : 0
-          return { ...b, spent, pct }
-        }).sort((a, b) => b.pct - a.pct)
-        return (
-          <div className="space-y-2">
-            {budgetRows.map(({ category, monthly_limit, spent, pct }) => (
-              <div key={category} className="bg-gray-900/60 border border-white/10 rounded-xl px-4 py-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm text-gray-300">{category}</span>
-                  <span className={`text-xs font-medium ${pct >= 1 ? 'text-red-400' : pct >= 0.75 ? 'text-yellow-400' : 'text-gray-400'}`}>
-                    ${spent.toFixed(0)} <span className="text-gray-600">/ ${monthly_limit.toFixed(0)}</span>
-                  </span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full transition-all ${pct >= 1 ? 'bg-red-500' : pct >= 0.75 ? 'bg-yellow-500' : 'bg-blue-500'}`}
-                    style={{ width: `${Math.min(pct * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      })()}
-
       {/* Actions */}
       <div className="space-y-3 pt-2">
         <div className="grid grid-cols-3 gap-3">
@@ -606,6 +573,37 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
           </button>
         </div>
       </div>
+
+      {/* Budget progress — compact list at bottom */}
+      {budgets?.length > 0 && (() => {
+        const yearBudgets = budgets.filter(b => b.year === selectedYear)
+        if (yearBudgets.length === 0) return null
+        const budgetRows = yearBudgets.map(b => {
+          const spent = monthExpenses
+            .filter(e => e.category === b.category && !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
+            .reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+          const pct = b.monthly_limit > 0 ? spent / b.monthly_limit : 0
+          return { ...b, spent, pct }
+        }).sort((a, b) => b.pct - a.pct)
+        return (
+          <div className="bg-gray-900/60 border border-white/10 rounded-xl overflow-hidden">
+            {budgetRows.map(({ category, monthly_limit, spent, pct }, i) => (
+              <div key={category} className={`flex items-center gap-3 px-4 py-2 ${i > 0 ? 'border-t border-white/5' : ''}`}>
+                <span className="text-xs text-gray-400 flex-1 truncate">{category}</span>
+                <div className="w-20 bg-gray-800 rounded-full h-1">
+                  <div
+                    className={`h-1 rounded-full transition-all ${pct >= 1 ? 'bg-red-500' : pct >= 0.75 ? 'bg-yellow-500' : 'bg-blue-500'}`}
+                    style={{ width: `${Math.min(pct * 100, 100)}%` }}
+                  />
+                </div>
+                <span className={`text-xs w-20 text-right tabular-nums ${pct >= 1 ? 'text-red-400' : pct >= 0.75 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  ${spent.toFixed(0)} / ${monthly_limit.toFixed(0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }
