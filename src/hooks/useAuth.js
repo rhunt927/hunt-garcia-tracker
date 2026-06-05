@@ -92,10 +92,7 @@ export function useAuth() {
 
   // Called by the user via the Sign Out button
   function logout() {
-    console.log('[logout] called, clearing session')
     clearSession()
-    console.log('[logout] session cleared, et_token now:', localStorage.getItem('et_token'))
-    console.log('[logout] navigating to', window.location.origin + import.meta.env.BASE_URL)
     window.location.assign(window.location.origin + import.meta.env.BASE_URL)
   }
 
