@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBack }) {
   const currentYear = new Date().getFullYear()
+  const [listYear, setListYear] = useState(currentYear)
   const [editing, setEditing] = useState(null) // null = list, string = category being edited
   const [budgetYear, setBudgetYear] = useState(currentYear)
   const [budgetAmount, setBudgetAmount] = useState('')
@@ -14,8 +15,8 @@ export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBac
   })
 
   function openCategory(category) {
-    setBudgetYear(currentYear)
-    const existing = (budgetsByCategory[category] ?? []).find(b => b.year === currentYear)
+    setBudgetYear(listYear)
+    const existing = (budgetsByCategory[category] ?? []).find(b => b.year === listYear)
     setBudgetAmount(existing ? String(existing.monthly_limit) : '')
     setEditing(category)
   }
@@ -43,32 +44,39 @@ export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBac
           <ChevronLeft size={16} /> Dashboard
         </button>
 
-        <h2 className="text-lg font-semibold text-white">Budgets</h2>
+        <div className="flex items-center justify-between px-1">
+          <button onClick={() => setListYear(y => y - 1)} className="p-1.5 text-gray-400 hover:text-white transition-colors">
+            <ChevronLeft size={22} />
+          </button>
+          <div className="text-center">
+            <p className="text-xl font-semibold text-white">{listYear} Budgets</p>
+            {listYear !== currentYear && (
+              <button onClick={() => setListYear(currentYear)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-0.5">
+                Back to {currentYear}
+              </button>
+            )}
+          </div>
+          <button onClick={() => setListYear(y => y + 1)} className="p-1.5 text-gray-400 hover:text-white transition-colors">
+            <ChevronRight size={22} />
+          </button>
+        </div>
 
         <div className="bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden">
           {categories.length === 0 && (
             <p className="text-sm text-gray-500 text-center py-8">No categories yet. Add some in Settings.</p>
           )}
           {categories.map((category, i) => {
-            const currentYearBudget = (budgetsByCategory[category] ?? []).find(b => b.year === currentYear)
-            const otherYears = (budgetsByCategory[category] ?? []).filter(b => b.year !== currentYear)
+            const budget = (budgetsByCategory[category] ?? []).find(b => b.year === listYear)
             return (
               <button
                 key={category}
                 onClick={() => openCategory(category)}
                 className={`w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors text-left ${i > 0 ? 'border-t border-white/5' : ''}`}
               >
-                <div>
-                  <span className="text-sm text-white">{category}</span>
-                  {otherYears.length > 0 && (
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      {otherYears.map(b => `${b.year}: $${b.monthly_limit}/mo`).join(' · ')}
-                    </p>
-                  )}
-                </div>
+                <span className="text-sm text-white">{category}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  {currentYearBudget ? (
-                    <span className="text-sm text-blue-400">${currentYearBudget.monthly_limit}/mo</span>
+                  {budget ? (
+                    <span className="text-sm text-blue-400">${budget.monthly_limit}/mo</span>
                   ) : (
                     <span className="text-sm text-gray-600">No budget</span>
                   )}
@@ -78,8 +86,6 @@ export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBac
             )
           })}
         </div>
-
-        <p className="text-xs text-gray-600 text-center">Showing {currentYear} budgets. Tap a category to edit.</p>
       </div>
     )
   }

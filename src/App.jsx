@@ -54,7 +54,7 @@ export default function App() {
     : {}
   const transactionTypes = db ? query('SELECT name, is_income, is_transfer FROM transaction_types ORDER BY is_income, name') : []
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
-  const budgets = db ? query('SELECT category, monthly_limit FROM budgets ORDER BY category') : []
+  const budgets = db ? query('SELECT category, year, monthly_limit FROM budgets ORDER BY category') : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
