@@ -95,7 +95,7 @@ export function useAuth() {
     const token = accessToken
     clearSession()
     if (token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => {})
-    window.location.reload()
+    window.location.replace(import.meta.env.BASE_URL)
   }
 
   // Called automatically when Drive returns 401/403 — clears stale token WITHOUT

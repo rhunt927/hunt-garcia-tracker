@@ -16,7 +16,7 @@ export function SettingsSidebar({ open, onClose, categories, paymentMethods, exc
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef(null)
   const SECTIONS = ['categories', 'payment_methods', 'transaction_types', 'exchange_rates']
-  const [collapsed, setCollapsed] = useState(new Set())
+  const [collapsed, setCollapsed] = useState(new Set(SECTIONS))
 
   function toggleSection(key) {
     setCollapsed(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
