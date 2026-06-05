@@ -92,10 +92,11 @@ export function useAuth() {
 
   // Called by the user via the Sign Out button
   function logout() {
-    const token = accessToken
+    console.log('[logout] called, clearing session')
     clearSession()
-    if (token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => {})
-    window.location.replace(import.meta.env.BASE_URL)
+    console.log('[logout] session cleared, et_token now:', localStorage.getItem('et_token'))
+    console.log('[logout] navigating to', window.location.origin + import.meta.env.BASE_URL)
+    window.location.assign(window.location.origin + import.meta.env.BASE_URL)
   }
 
   // Called automatically when Drive returns 401/403 — clears stale token WITHOUT
