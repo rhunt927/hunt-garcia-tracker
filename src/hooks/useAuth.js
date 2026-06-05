@@ -40,12 +40,16 @@ export function useAuth() {
   const [gisReady, setGisReady] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     const { token, user: savedUser } = loadSession()
     if (token && savedUser) {
       setUser(savedUser)
       setAccessToken(token)
       setLoading(false)
       fetchUserProfile(token).then(userObj => {
+        // cancelled: StrictMode fired a second effect — discard the first fetch result
+        // !localStorage: logout() ran while fetch was in flight — don't restore the session
+        if (cancelled || !localStorage.getItem('et_token')) return
         saveSession(userObj, token)
         setUser(userObj)
       }).catch(() => {})
@@ -62,6 +66,7 @@ export function useAuth() {
     }
     script.onerror = () => { if (!token) setLoading(false) }
     document.body.appendChild(script)
+    return () => { cancelled = true }
   }, [])
 
   const login = useCallback(() => {
