@@ -1,5 +1,8 @@
-import { useState, useCallback, useEffect, useRef, Component } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo, Component } from 'react'
 import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import { Reports } from './components/Reports'
 import { Budget } from './components/Budget'
 import { useAuth } from './hooks/useAuth'
@@ -380,6 +383,67 @@ export default function App() {
   )
 }
 
+function CashFlowChart({ expenses, incomeTypeNames, transferTypeNames }) {
+  const chartRef = useRef(null)
+  const [chartReady, setChartReady] = useState(false)
+
+  useEffect(() => {
+    if (!chartRef.current) return
+    const ro = new ResizeObserver(entries => {
+      if (entries[0]?.contentRect.width > 0) setChartReady(true)
+    })
+    ro.observe(chartRef.current)
+    return () => ro.disconnect()
+  }, [])
+
+  const data = useMemo(() => {
+    const now = new Date()
+    const months = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      months.push({ key, label: d.toLocaleString('default', { month: 'short', year: '2-digit' }) })
+    }
+    return months.map(({ key, label }) => {
+      const inMonth = expenses.filter(e => e.date?.startsWith(key))
+      const income = inMonth.filter(e => incomeTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+      const expenses_ = inMonth.filter(e => !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type)).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+      const net = income - expenses_
+      return { month: label, Income: parseFloat(income.toFixed(2)), Expenses: parseFloat(expenses_.toFixed(2)), Net: parseFloat(net.toFixed(2)) }
+    })
+  }, [expenses, incomeTypeNames, transferTypeNames])
+
+  const hasData = data.some(d => d.Income > 0 || d.Expenses > 0)
+
+  return (
+    <div className="bg-gray-900/60 border border-white/10 rounded-2xl p-4">
+      <p className="text-sm font-medium text-gray-300 mb-3">Cash Flow — Last 12 Months</p>
+      <div ref={chartRef}>
+        {!hasData ? (
+          <p className="text-center text-gray-500 text-sm py-8">No transaction data yet.</p>
+        ) : !chartReady ? null : (
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={data} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `$${Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+              <Tooltip
+                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                labelStyle={{ color: '#f3f4f6', fontSize: 12 }}
+                formatter={(value, name) => [`$${Number(value).toFixed(2)}`, name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af' }} />
+              <Bar dataKey="Income" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={20} />
+              <Bar dataKey="Expenses" fill="#f97316" radius={[3, 3, 0, 0]} maxBarSize={20} />
+              <Line dataKey="Net" type="monotone" stroke="#60a5fa" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
@@ -470,6 +534,9 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
           {net >= 0 ? '+' : ''}${net.toFixed(2)}
         </span>
       </div>
+
+      {/* Cash flow chart */}
+      <CashFlowChart expenses={expenses} incomeTypeNames={incomeTypeNames} transferTypeNames={transferTypeNames} />
 
       {/* Budget progress */}
       {budgets?.length > 0 && (() => {

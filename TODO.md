@@ -12,7 +12,12 @@
 
 ---
 
-## High Priority
+## High Priority — Do First
+
+- [ ] **Sign out broken** — clicking Sign Out in the Settings sidebar does not return to the login
+  screen. Two fixes attempted (GIS revoke bypass, fetchUserProfile race guard) but still failing.
+  Need to open browser devtools, reproduce the sign-out click, and read the console/network tab
+  to find the actual error before guessing further.
 
 - [ ] **Cash flow: monthly net chart** — dashboard card showing income vs. expense bars per month
   (last 6–12 months) with a net line overlay. Uses existing transaction data, no schema changes.
