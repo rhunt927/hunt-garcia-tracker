@@ -336,6 +336,8 @@ export default function App() {
                 onAddCategory={handleAddCategory}
                 onEditExpense={(expense) => { setReturnTo('budget'); setFormState(expense) }}
                 onBack={() => setFormState(null)}
+                initialYear={dashboardYear}
+                initialMonth={dashboardMonth}
               />
             ) : formState === 'reports' ? (
               <ErrorBoundary key={reportFilters.dateFrom}>
@@ -377,7 +379,7 @@ export default function App() {
                 onAdd={() => setFormState('add')}
                 onImportCSV={() => setFormState('csv')}
                 onViewReports={(filters) => { setReportFilters(filters || {}); setFormState('reports') }}
-                onViewBudget={() => setFormState('budget')}
+                onViewBudget={() => { setFormState('budget') }}
               />
             )}
           </>

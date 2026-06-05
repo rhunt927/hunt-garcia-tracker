@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Check, X, Pencil } from 'lucide-react'
 
-export function Budget({ categories, budgets, expenses, transactionTypes, onSetBudget, onDeleteBudget, onAddCategory, onEditExpense, onBack }) {
+export function Budget({ categories, budgets, expenses, transactionTypes, onSetBudget, onDeleteBudget, onAddCategory, onEditExpense, onBack, initialYear, initialMonth }) {
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth()
 
-  const [year, setYear] = useState(currentYear)
-  const [month, setMonth] = useState(currentMonth)
+  const [year, setYear] = useState(initialYear ?? currentYear)
+  const [month, setMonth] = useState(initialMonth ?? currentMonth)
   const [view, setView] = useState('list') // 'list' | 'detail' | 'edit'
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [budgetYear, setBudgetYear] = useState(currentYear)
