@@ -6,26 +6,10 @@
 - [x] Recurring flag — toggle in transaction form, purple ↺ icon in list
 - [x] Search — already existed in Transactions view
 - [x] Import: Local File + Google Drive picker (drive.readonly scope; requires sign out/in once to activate)
-- [x] Sign out fixed — works on Mac and iOS; state clears immediately, revoke runs in background
+- [x] Sign out fixed — hard reload after clearing localStorage; works on Mac and iOS
 - [x] iOS Reports white screen fixed — recharts v3 labelLine crash + ResizeObserver dimension guard + ErrorBoundary
 - [x] PDF parser iOS fix — worker URL construction updated for PWA standalone mode
-
----
-
-## High Priority — Do First
-
-- [ ] **Sign out broken** — clicking Sign Out in the Settings sidebar does not return to the login
-  screen. Two fixes attempted (GIS revoke bypass, fetchUserProfile race guard) but still failing.
-  Need to open browser devtools, reproduce the sign-out click, and read the console/network tab
-  to find the actual error before guessing further.
-
-- [ ] **Cash flow: monthly net chart** — dashboard card showing income vs. expense bars per month
-  (last 6–12 months) with a net line overlay. Uses existing transaction data, no schema changes.
-  recharts already in use.
-
-- [ ] **Cash flow: running balance** — cumulative position line chart. Requires a "starting balance"
-  field in Settings (one number, persisted in DB). Shows true bank-balance trend over time.
-  Build after the monthly net chart is in place.
+- [x] Cash flow chart — grouped income/expense bars + net line, last 12 months, on dashboard
 
 ---
 
