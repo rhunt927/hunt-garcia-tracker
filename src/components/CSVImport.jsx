@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Upload, X, CheckSquare, Square, AlertTriangle, HardDrive, FolderOpen } from 'lucide-react'
-import { parseCSV } from '../lib/csvParsers'
+import { parseCSV, parseTxt } from '../lib/csvParsers'
 import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
 import { CategorySelect } from './CategorySelect'
@@ -44,8 +44,10 @@ export function CSVImport({
     if (!file) return
     setError(null)
     try {
-      const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
-      const { rows: parsed, bankName: bank } = isPDF ? await parsePDF(file) : await parseCSV(file)
+      const name = file.name.toLowerCase()
+      const isPDF = name.endsWith('.pdf') || file.type === 'application/pdf'
+      const isTxt = name.endsWith('.txt') || file.type === 'text/plain'
+      const { rows: parsed, bankName: bank } = isPDF ? await parsePDF(file) : isTxt ? await parseTxt(file) : await parseCSV(file)
       setBankName(bank)
       setRows(parsed.map(r => ({
         ...r,
@@ -78,7 +80,7 @@ export function CSVImport({
       const folderId = folders.length > 0 ? folders[0].id : 'root'
 
       const q = encodeURIComponent(
-        `'${folderId}' in parents and trashed=false and (mimeType='text/csv' or mimeType='application/pdf')`
+        `'${folderId}' in parents and trashed=false and (mimeType='text/csv' or mimeType='application/pdf' or mimeType='text/plain')`
       )
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&pageSize=100`,
@@ -277,6 +279,7 @@ export function CSVImport({
             </div>
             <p className="text-xs text-gray-600 mt-4">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
             <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover</p>
+            <p className="text-xs text-gray-600">TXT: BofA statement export</p>
           </div>
         </>
       )}
@@ -317,7 +320,7 @@ export function CSVImport({
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.pdf"
+        accept=".csv,.pdf,.txt"
         className="hidden"
         onChange={e => handleFile(e.target.files?.[0])}
       />

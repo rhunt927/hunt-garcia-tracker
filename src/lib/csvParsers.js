@@ -1,6 +1,74 @@
 import Papa from 'papaparse'
 
 // Returns { rows, bankName } or throws
+export function parseTxt(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const rows = parseBofATxt(e.target.result)
+        resolve({ rows, bankName: 'Bank of America' })
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error('Could not read file'))
+    reader.readAsText(file)
+  })
+}
+
+// Two numbers at end of line: amount + running balance
+const TX_RE = /^(\d{2}\/\d{2}\/\d{4})\s+(.*?)\s{2,}(-?[\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/
+
+function parseBofATxt(text) {
+  const lines = text.split('\n')
+  const headerIdx = lines.findIndex(l => /^Date\s+Description/i.test(l))
+  if (headerIdx === -1) throw new Error('Unrecognized text format — expected Bank of America statement')
+
+  const rows = []
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const m = TX_RE.exec(lines[i].trimEnd())
+    if (!m) continue
+    const [, dateStr, rawDesc, amtStr] = m
+    const amount = parseFloat(amtStr.replace(/,/g, ''))
+    if (isNaN(amount) || amount === 0) continue
+    const isCredit = amount > 0
+    rows.push({
+      date: mmddyyyy(dateStr),
+      merchant: cleanBofADesc(rawDesc),
+      description: rawDesc.trim(),
+      amount: Math.abs(amount),
+      currency: 'USD',
+      amount_usd: Math.abs(amount),
+      isCredit,
+      category: null,
+      payment_method: 'BOA Checking',
+      source: 'txt_boa',
+    })
+  }
+  if (rows.length === 0) throw new Error('No transactions found in this file')
+  return rows
+}
+
+function cleanBofADesc(raw) {
+  const d = raw.trim()
+  if (/^Check \d+/i.test(d)) return d.match(/^Check \d+/i)[0]
+  if (/^BKOFAMERICA ATM|^ATM WITHDRWL/i.test(d)) return 'ATM Withdrawal'
+  if (/^KEEP THE CHANGE/i.test(d)) return 'Keep the Change'
+  const zFrom = d.match(/^Zelle (?:Recurring )?payment from ([^;]+?)\s+for\s+/i)
+  if (zFrom) return `Zelle from ${zFrom[1].trim()}`
+  const zTo = d.match(/^Zelle (?:Recurring )?payment to ([^;]+?)\s+for\s+/i)
+  if (zTo) return `Zelle to ${zTo[1].trim()}`
+  const bill = d.match(/^(.*?)\s+Bill Payment/i)
+  if (bill) return bill[1].trim()
+  const payroll = d.match(/^([\w][^D]+?)\s+DES:PAYROLL/i)
+  if (payroll) return payroll[1].trim()
+  const retail = d.match(/^(.*?)\s+\d{2}\/\d{2}\s+PURCHASE/i)
+  if (retail) return retail[1].replace(/\s+#\S+$/, '').trim()
+  return d.split(/\s{2,}/)[0].trim()
+}
+
+// Returns { rows, bankName } or throws
 export function parseCSV(file) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
