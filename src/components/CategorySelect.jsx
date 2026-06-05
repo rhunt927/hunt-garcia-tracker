@@ -54,6 +54,9 @@ export function CategorySelect({ value, onChange, categories, onAdd, className =
       {categories.map(c => (
         <option key={c} value={c}>{c}</option>
       ))}
+      {value && !categories.includes(value) && (
+        <option key={value} value={value}>{value}</option>
+      )}
       <option value="__new__">＋ Add category…</option>
     </select>
   )

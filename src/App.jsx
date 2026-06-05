@@ -331,6 +331,7 @@ export default function App() {
                 budgets={budgets}
                 onSetBudget={handleSetBudget}
                 onDeleteBudget={handleDeleteBudget}
+                onAddCategory={handleAddCategory}
                 onBack={() => setFormState(null)}
               />
             ) : formState === 'reports' ? (

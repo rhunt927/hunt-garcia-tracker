@@ -1,10 +1,26 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react'
 
-export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBack }) {
+export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onAddCategory, onBack }) {
   const currentYear = new Date().getFullYear()
   const [listYear, setListYear] = useState(currentYear)
-  const [editing, setEditing] = useState(null) // null = list, string = category being edited
+  const [editing, setEditing] = useState(null)
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const newCatRef = useRef(null)
+
+  useEffect(() => {
+    if (addingCategory) newCatRef.current?.focus()
+  }, [addingCategory])
+
+  function confirmNewCategory() {
+    const name = newCategoryName.trim()
+    setAddingCategory(false)
+    setNewCategoryName('')
+    if (!name) return
+    onAddCategory?.(name)
+    openCategory(name)
+  } // null = list, string = category being edited
   const [budgetYear, setBudgetYear] = useState(currentYear)
   const [budgetAmount, setBudgetAmount] = useState('')
 
@@ -86,6 +102,28 @@ export function Budget({ categories, budgets, onSetBudget, onDeleteBudget, onBac
             )
           })}
         </div>
+
+        {addingCategory ? (
+          <div className="flex gap-2 items-center px-4 py-3 border-t border-white/10">
+            <input
+              ref={newCatRef}
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmNewCategory(); if (e.key === 'Escape') { setAddingCategory(false); setNewCategoryName('') } }}
+              placeholder="Category name"
+              className="flex-1 bg-gray-800 border border-blue-500 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+            />
+            <button onClick={confirmNewCategory} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+            <button onClick={() => { setAddingCategory(false); setNewCategoryName('') }} className="text-gray-500 hover:text-white"><X size={16} /></button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingCategory(true)}
+            className="w-full text-left px-4 py-3 border-t border-white/10 text-sm text-gray-500 hover:text-blue-400 transition-colors"
+          >
+            + New Category
+          </button>
+        )}
       </div>
     )
   }
