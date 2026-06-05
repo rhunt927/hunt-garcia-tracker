@@ -10,6 +10,11 @@
 - [x] iOS Reports white screen fixed — recharts v3 labelLine crash + ResizeObserver dimension guard + ErrorBoundary
 - [x] PDF parser iOS fix — worker URL construction updated for PWA standalone mode
 - [x] Cash flow chart — grouped income/expense bars + net line, last 12 months, on dashboard
+- [x] Budget screen redesign — list→detail→edit flow; drill into transactions by month; unbudgeted categories with spending shown in orange; inline category creation; year navigation
+- [x] Drive import locked to ExpenseTracker folder — no longer navigates all of Drive; expenses.db hidden from picker
+- [x] CategorySelect inline-add bug fixed — new category no longer snaps to blank in the dropdown
+- [x] App renamed to "Hunt-Garcia Household Tracker" — title, manifest, login screen, header all updated
+- [x] Panama flag icon — favicon.svg + all PWA icon sizes (64, 192, 512, maskable, apple-touch) replaced with Panama flag; login screen uses inline SVG flag
 
 ---
 
@@ -36,6 +41,16 @@
 
 - [ ] **Merchant autocomplete**
   As you type in the Merchant field, suggest previously used merchant names. Reduces repetitive entry.
+
+---
+
+## Low Priority / Housekeeping
+
+- [ ] **Rename GitHub repo and URL**
+  Repo is still `expense-tracker` / URL is still `rhunt927.github.io/expense-tracker`.
+  Rename the GitHub repo to `hg-tracker` (or similar), update `base` in `vite.config.js`,
+  update `index.html` favicon/icon paths, and re-deploy. Note: old URL will break for anyone
+  who has the PWA installed — will need to uninstall/reinstall.
 
 ---
 
