@@ -97,6 +97,13 @@ export default function App() {
     await save()
   }, [run, save])
 
+  const handleBulkEdit = useCallback(async (ids, { type, category }) => {
+    const placeholders = ids.map(() => '?').join(',')
+    if (type) run(`UPDATE expenses SET type=? WHERE id IN (${placeholders})`, [type, ...ids])
+    if (category) run(`UPDATE expenses SET category=? WHERE id IN (${placeholders})`, [category, ...ids])
+    await save()
+  }, [run, save])
+
   // Category callbacks
   const handleAddCategory = useCallback(async (name) => {
     run('INSERT OR IGNORE INTO categories VALUES (?)', [name])
@@ -346,6 +353,7 @@ export default function App() {
                 onEdit={(expense) => { listScrollY.current = window.scrollY; setReturnTo('list'); setFormState(expense) }}
                 onDelete={handleDelete}
                 onBulkDelete={handleBulkDelete}
+                onBulkEdit={handleBulkEdit}
                 onImportCSV={() => setFormState('csv')}
                 onBack={() => { setListFilters({}); setFormState(null) }}
               />

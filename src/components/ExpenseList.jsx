@@ -3,7 +3,7 @@ import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft,
 import { format, parseISO } from 'date-fns'
 import { toTitleCase } from '../lib/utils'
 
-export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onEdit, onDelete, onBulkDelete, onImportCSV, onBack, initialFrom, initialTo, initialFilterType }) {
+export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onEdit, onDelete, onBulkDelete, onBulkEdit, onImportCSV, onBack, initialFrom, initialTo, initialFilterType }) {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterType, setFilterType] = useState(initialFilterType || 'all')
@@ -12,6 +12,8 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   const [selected, setSelected] = useState(new Set())
   const [sortBy, setSortBy] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
+  const [bulkType, setBulkType] = useState('')
+  const [bulkCategory, setBulkCategory] = useState('')
 
   function toggleSort(field) {
     if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -73,6 +75,15 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
     if (!window.confirm(`Delete ${ids.length} transaction${ids.length === 1 ? '' : 's'}?`)) return
     await onBulkDelete(ids)
     setSelected(new Set())
+  }
+
+  async function handleBulkEdit() {
+    const ids = [...selected].filter(id => filtered.some(e => e.id === id))
+    if (!ids.length || (!bulkType && !bulkCategory)) return
+    await onBulkEdit(ids, { type: bulkType || null, category: bulkCategory || null })
+    setSelected(new Set())
+    setBulkType('')
+    setBulkCategory('')
   }
 
   return (
@@ -184,6 +195,39 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
               </div>
             )}
           </div>
+
+          {/* Bulk edit bar */}
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={bulkType}
+                onChange={e => setBulkType(e.target.value)}
+                className="bg-gray-800 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Type: no change</option>
+                {(transactionTypes ?? []).map(t => (
+                  <option key={t.name} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+              <select
+                value={bulkCategory}
+                onChange={e => setBulkCategory(e.target.value)}
+                className="bg-gray-800 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Category: no change</option>
+                {categories.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkEdit}
+                disabled={!bulkType && !bulkCategory}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Apply to {selected.size}
+              </button>
+            </div>
+          )}
 
           {/* Income / Expenses / Net summary */}
           {filtered.length > 0 && selected.size === 0 && (
