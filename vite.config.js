@@ -11,9 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Expense Tracker',
-        short_name: 'Expenses',
-        description: 'Personal expense tracker',
+        name: 'Hunt-Garcia Household Tracker',
+        short_name: 'HG Tracker',
+        description: 'Hunt-Garcia household expense tracker',
         theme_color: '#1d4ed8',
         background_color: '#ffffff',
         display: 'standalone',

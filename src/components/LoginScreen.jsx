@@ -14,8 +14,17 @@ export function LoginScreen({ onLogin, gisReady }) {
       <div className="absolute inset-0 bg-black/60" />
 
       <div className="relative z-10 bg-gray-900/80 backdrop-blur-sm rounded-2xl p-8 w-full max-w-sm shadow-xl text-center border border-white/10">
-        <div className="text-4xl mb-4">💳</div>
-        <h1 className="text-2xl font-bold text-white mb-1">Expense Tracker</h1>
+        <div className="mb-4">
+          <svg viewBox="0 0 40 40" className="w-12 h-12 mx-auto rounded-lg shadow">
+            <rect x="0" y="0" width="20" height="20" fill="#ffffff"/>
+            <rect x="20" y="0" width="20" height="20" fill="#D21034"/>
+            <rect x="0" y="20" width="20" height="20" fill="#005293"/>
+            <rect x="20" y="20" width="20" height="20" fill="#ffffff"/>
+            <polygon points="10,5 11.2,8.6 15,8.6 12,10.8 13.2,14.4 10,12.2 6.8,14.4 8,10.8 5,8.6 8.8,8.6" fill="#005293"/>
+            <polygon points="30,21 31.2,24.6 35,24.6 32,26.8 33.2,30.4 30,28.2 26.8,30.4 28,26.8 25,24.6 28.8,24.6" fill="#D21034"/>
+          </svg>
+        </div>
+        <h1 className="text-xl font-bold text-white mb-1">Hunt-Garcia Household Tracker</h1>
         <p className="text-blue-300 text-xs mb-4">Panama City, Panamá</p>
         <p className="text-gray-400 text-sm mb-8">
           Sign in with Google to access your expenses stored in Google Drive.

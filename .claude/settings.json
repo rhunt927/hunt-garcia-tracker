@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(TMPDIR=/tmp grep -n \"onLogout\\\\|logout\\\\|signOut\\\\|clearAuth\" /Users/rhunt/Documents/expense-tracker/src/App.jsx)",
+      "Bash(TMPDIR=/tmp grep -n \"user\\\\|loading\\\\|LoginScreen\" /Users/rhunt/Documents/expense-tracker/src/App.jsx)",
+      "Bash(TMPDIR=/tmp grep -n \"loading\\\\|setLoading\" /Users/rhunt/Documents/expense-tracker/src/hooks/useAuth.js)",
+      "Bash(TMPDIR=/tmp grep -n \"loading\\\\|setLoading\\\\|accessToken\\\\|clearAuth\" /Users/rhunt/Documents/expense-tracker/src/hooks/useDatabase.js)",
+      "Bash(TMPDIR=/tmp grep -n \"portal\\\\|createPortal\\\\|document.body\\\\|fixed\\\\|overlay\\\\|z-\" /Users/rhunt/Documents/expense-tracker/src/components/SettingsSidebar.jsx)",
+      "Bash(TMPDIR=/tmp grep -n \"useEffect\\\\|save\\(\\)\" /Users/rhunt/Documents/expense-tracker/src/App.jsx)",
+      "Bash(TMPDIR=/tmp grep -n \"onBulkDelete\\\\|handleBulkDelete\" /Users/rhunt/Documents/expense-tracker/src/App.jsx)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(sleep 3 && cat /tmp/vite-cashflow.log)",
+      "Read(//private/tmp/**)",
+      "Bash(open -a \"Google Chrome\" \"http://localhost:5199/expense-tracker/\")",
+      "Bash(convert --version)",
+      "Bash(node -e \"require\\('canvas'\\)\")",
+      "Bash(node -e \"require\\('sharp'\\)\")",
+      "Bash(node generate-icons.mjs)"
+    ]
+  }
+}

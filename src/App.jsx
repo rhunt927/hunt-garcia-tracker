@@ -287,7 +287,7 @@ export default function App() {
               onClick={() => setFormState(null)}
               className="text-2xl font-bold hover:text-gray-300 transition-colors"
             >
-              Expense Tracker
+              Hunt-Garcia Household Tracker
             </button>
           </div>
           <div className="flex items-center gap-2">
