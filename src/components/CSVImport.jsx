@@ -17,7 +17,8 @@ export function CSVImport({
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
-  const [driveFiles, setDriveFiles] = useState(null)
+  const [driveOpen, setDriveOpen] = useState(false)
+  const [driveItems, setDriveItems] = useState({ folders: [], files: [] })
   const [driveLoading, setDriveLoading] = useState(false)
 
   function defaultCategory() {
@@ -62,28 +63,45 @@ export function CSVImport({
   async function browseDrive() {
     if (!accessToken) return
     setDriveLoading(true)
+    setDriveOpen(true)
     setError(null)
     try {
-      const q = encodeURIComponent("(mimeType='text/csv' or mimeType='application/pdf') and trashed=false")
-      const res = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc&pageSize=50`,
+      // Find the ExpenseTracker folder (same one used for the DB)
+      const folderRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name='ExpenseTracker' and mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=files(id)`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
-      if (res.status === 401 || res.status === 403) {
+      if (folderRes.status === 401 || folderRes.status === 403)
         throw new Error('Drive access needs to be refreshed — please sign out and sign back in, then try again.')
-      }
+      if (!folderRes.ok) throw new Error('Could not access Drive')
+      const { files: folders } = await folderRes.json()
+      const folderId = folders.length > 0 ? folders[0].id : 'root'
+
+      const q = encodeURIComponent(
+        `'${folderId}' in parents and trashed=false and (mimeType='text/csv' or mimeType='application/pdf')`
+      )
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&pageSize=100`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
       if (!res.ok) throw new Error('Could not load Drive files')
       const { files } = await res.json()
-      setDriveFiles(files)
+      setDriveItems({ folders: [], files: files.filter(f => f.name !== 'expenses.db') })
     } catch (e) {
       setError(e.message)
+      setDriveOpen(false)
     } finally {
       setDriveLoading(false)
     }
   }
 
+  function closeDrive() {
+    setDriveOpen(false)
+    setDriveItems({ folders: [], files: [] })
+  }
+
   async function pickDriveFile(file) {
-    setDriveFiles(null)
+    setDriveOpen(false)
     setDriveLoading(true)
     setError(null)
     try {
@@ -224,7 +242,7 @@ export function CSVImport({
       </div>
 
       {/* File picker */}
-      {rows.length === 0 && !driveFiles && (
+      {rows.length === 0 && !driveOpen && (
         <>
           <div
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -264,19 +282,21 @@ export function CSVImport({
       )}
 
       {/* Google Drive file browser */}
-      {driveFiles && (
+      {driveOpen && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">Select a file from Google Drive</span>
-            <button onClick={() => setDriveFiles(null)} className="text-gray-500 hover:text-white transition-colors">
+            <span className="text-sm text-gray-400">ExpenseTracker folder</span>
+            <button onClick={closeDrive} className="text-gray-500 hover:text-white transition-colors">
               <X size={16} />
             </button>
           </div>
-          {driveFiles.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6">No CSV or PDF files found in Drive.</p>
+          {driveLoading ? (
+            <p className="text-sm text-gray-500 text-center py-6">Loading…</p>
+          ) : driveItems.files.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No CSV or PDF files in your ExpenseTracker folder.</p>
           ) : (
             <div className="space-y-1 max-h-64 overflow-y-auto">
-              {driveFiles.map(f => (
+              {driveItems.files.map(f => (
                 <button
                   key={f.id}
                   onClick={() => pickDriveFile(f)}
