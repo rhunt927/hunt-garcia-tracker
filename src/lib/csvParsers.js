@@ -193,11 +193,15 @@ const BOA = {
 const SCHWAB = {
   name: 'Schwab',
   parse: (row) => {
-    const withdrawalKey = Object.keys(row).find(k => k.toLowerCase().includes('withdrawal'))
-    const raw = row[withdrawalKey] ?? ''
-    const amount = parseFloat(raw.replace(/[$,]/g, ''))
+    const keys = Object.keys(row)
+    const withdrawalKey = keys.find(k => k.toLowerCase().includes('withdrawal'))
+    const depositKey = keys.find(k => k.toLowerCase().includes('deposit'))
+    const dateKey = keys.find(k => k.toLowerCase().includes('date'))
+    const withdrawal = parseFloat((row[withdrawalKey] ?? '').replace(/[$,]/g, ''))
+    const deposit = parseFloat((row[depositKey] ?? '').replace(/[$,]/g, ''))
+    const isCredit = !isNaN(deposit) && deposit > 0
+    const amount = isCredit ? deposit : withdrawal
     if (isNaN(amount) || amount <= 0) return null
-    const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('date'))
     return {
       date: mmddyyyy(row[dateKey]),
       merchant: row['Description']?.trim(),
@@ -205,6 +209,7 @@ const SCHWAB = {
       amount,
       currency: 'USD',
       amount_usd: amount,
+      isCredit,
       category: null,
       payment_method: 'Schwab Checking',
       source: 'csv_schwab',
