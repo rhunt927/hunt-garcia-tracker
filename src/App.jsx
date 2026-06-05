@@ -527,14 +527,6 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
         </button>
       </div>
 
-      {/* Net */}
-      <div className="bg-gray-900/60 border border-white/10 rounded-2xl px-5 py-4 flex items-center justify-between">
-        <span className="text-sm text-gray-400">Net</span>
-        <span className={`text-xl font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {net >= 0 ? '+' : ''}${net.toFixed(2)}
-        </span>
-      </div>
-
       {/* Cash flow chart */}
       <CashFlowChart expenses={expenses} incomeTypeNames={incomeTypeNames} transferTypeNames={transferTypeNames} />
 
