@@ -242,7 +242,7 @@ export default function App() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         user={user}
-        onLogout={logout}
+        onLogout={() => { logout(); setSidebarOpen(false) }}
         categories={categories}
         paymentMethods={paymentMethods}
         exchangeRates={exchangeRates}

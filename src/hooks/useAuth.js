@@ -92,8 +92,8 @@ export function useAuth() {
     clearSession()
     setUser(null)
     setAccessToken(null)
-    // Best-effort revoke in the background — don't block or redirect
-    try { window.google?.accounts?.oauth2?.revoke(token, () => {}) } catch {}
+    // Revoke via direct fetch — avoids GIS library side-effects (re-prompts, token refresh)
+    if (token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => {})
   }
 
   // Called automatically when Drive returns 401/403 — clears stale token WITHOUT
