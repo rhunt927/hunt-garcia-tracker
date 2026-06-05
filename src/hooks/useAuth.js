@@ -93,12 +93,9 @@ export function useAuth() {
   // Called by the user via the Sign Out button
   function logout() {
     const token = accessToken
-    // Clear state first so the UI immediately shows the login screen
     clearSession()
-    setUser(null)
-    setAccessToken(null)
-    // Revoke via direct fetch — avoids GIS library side-effects (re-prompts, token refresh)
     if (token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => {})
+    window.location.reload()
   }
 
   // Called automatically when Drive returns 401/403 — clears stale token WITHOUT
