@@ -99,6 +99,7 @@ function detectParser(headers) {
   if (h.includes('transaction date') && h.includes('post date') && h.includes('memo')) return CHASE
   if (h.includes('trans. date') && h.includes('post date')) return DISCOVER
   if (h.includes('posted date') && h.includes('payee') && h.includes('reference number')) return BOA
+  if (h.includes('checknumber') && h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB_INVESTOR
   if (h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB
   return GENERIC
 }
@@ -193,6 +194,28 @@ const BOA = {
 const SCHWAB = {
   name: 'Schwab',
   parse: (row) => {
+    const withdrawalKey = Object.keys(row).find(k => k.toLowerCase().includes('withdrawal'))
+    const raw = row[withdrawalKey] ?? ''
+    const amount = parseFloat(raw.replace(/[$,]/g, ''))
+    if (isNaN(amount) || amount <= 0) return null
+    const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('date'))
+    return {
+      date: mmddyyyy(row[dateKey]),
+      merchant: row['Description']?.trim(),
+      description: null,
+      amount,
+      currency: 'USD',
+      amount_usd: amount,
+      category: null,
+      payment_method: 'Schwab Checking',
+      source: 'csv_schwab',
+    }
+  },
+}
+
+const SCHWAB_INVESTOR = {
+  name: 'Schwab Investor Checking',
+  parse: (row) => {
     const keys = Object.keys(row)
     const withdrawalKey = keys.find(k => k.toLowerCase().includes('withdrawal'))
     const depositKey = keys.find(k => k.toLowerCase().includes('deposit'))
@@ -211,8 +234,8 @@ const SCHWAB = {
       amount_usd: amount,
       isCredit,
       category: null,
-      payment_method: 'Schwab Checking',
-      source: 'csv_schwab',
+      payment_method: 'Schwab Investor Checking',
+      source: 'csv_schwab_investor',
     }
   },
 }
