@@ -115,9 +115,12 @@ function parseStatementLines(lines, bank) {
   }
 
   // Pass 2: no section headers found — scan all lines, classify purely by keywords
-  for (const line of lines) {
-    const parsed = parseTxnLine(line, year, bank, null)
-    if (parsed) rows.push(parsed)
+  for (let i = 0; i < lines.length; i++) {
+    const parsed = parseTxnLine(lines[i], year, bank, null)
+    if (parsed) {
+      parsed.description = followOnLine(lines, i, bank)
+      rows.push(parsed)
+    }
   }
 
   if (rows.length === 0) {
@@ -131,17 +134,33 @@ function parseSectionAware(lines, bank, year) {
   const rows = []
   let sectionType = null
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     if (bank.skipSection?.test(line))   { sectionType = null;     continue }
     if (bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
     if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
     const parsed = parseTxnLine(line, year, bank, sectionType === 'credit')
-    if (parsed) rows.push(parsed)
+    if (parsed) {
+      parsed.description = followOnLine(lines, i, bank)
+      rows.push(parsed)
+    }
   }
 
   return rows
+}
+
+// Returns the next line as a description if it looks like a payee continuation,
+// not a new transaction, section header, or balance/summary line.
+function followOnLine(lines, i, bank) {
+  const next = lines[i + 1]?.trim()
+  if (!next) return null
+  if (/^\d{2}\/\d{2}/.test(next)) return null
+  if (bank.creditSection?.test(next) || bank.debitSection?.test(next) || bank.skipSection?.test(next)) return null
+  if (/^(beginning|ending|total|balance|interest rate|service fee|new balance|minimum|average daily)/i.test(next)) return null
+  if (/^\$?[\d,]+\.\d{2}$/.test(next)) return null
+  return next
 }
 
 // After section detection, let strong description keywords override the section classification.
