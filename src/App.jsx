@@ -1,4 +1,4 @@
-import { useState, useCallback, Component } from 'react'
+import { useState, useCallback, useEffect, useRef, Component } from 'react'
 import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
 import { Reports } from './components/Reports'
 import { Budget } from './components/Budget'
@@ -38,6 +38,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [dashboardYear, setDashboardYear] = useState(() => new Date().getFullYear())
   const [dashboardMonth, setDashboardMonth] = useState(() => new Date().getMonth())
+  const listScrollY = useRef(0)
+
+  useEffect(() => {
+    if (formState === 'list') window.scrollTo(0, listScrollY.current)
+  }, [formState])
 
   const categories = db ? query('SELECT name FROM categories ORDER BY name').map(r => r.name) : []
   const paymentMethods = db ? query('SELECT name FROM payment_methods ORDER BY name').map(r => r.name) : []
@@ -338,7 +343,7 @@ export default function App() {
                 initialTo={listFilters.dateTo}
                 initialFilterType={listFilters.filterType}
                 onAdd={() => { setReturnTo('list'); setFormState('add') }}
-                onEdit={(expense) => { setReturnTo('list'); setFormState(expense) }}
+                onEdit={(expense) => { listScrollY.current = window.scrollY; setReturnTo('list'); setFormState(expense) }}
                 onDelete={handleDelete}
                 onBulkDelete={handleBulkDelete}
                 onImportCSV={() => setFormState('csv')}
