@@ -16,7 +16,13 @@
       "Bash(convert --version)",
       "Bash(node -e \"require\\('canvas'\\)\")",
       "Bash(node -e \"require\\('sharp'\\)\")",
-      "Bash(node generate-icons.mjs)"
+      "Bash(node generate-icons.mjs)",
+      "Bash(gh repo *)",
+      "Bash(which gh *)",
+      "Read(//usr/local/bin/**)",
+      "Bash(git -C /Users/rhunt/Documents/expense-tracker remote get-url origin)",
+      "Read(//Users/rhunt/.config/gh/**)",
+      "Read(//Users/rhunt/**)"
     ]
   }
 }
