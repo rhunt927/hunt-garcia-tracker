@@ -113,9 +113,17 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
 
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
-          <ChevronLeft size={16} /> Dashboard
-        </button>
+        <div className="flex items-center justify-between">
+          <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+            <ChevronLeft size={16} /> Dashboard
+          </button>
+          {!isCurrentMonth && (
+            <button onClick={() => { setYear(currentYear); setMonth(currentMonth) }}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              Back to current month
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center justify-between px-1">
           <button onClick={prevMonth} className="p-1.5 text-gray-400 hover:text-white transition-colors">
@@ -129,12 +137,6 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
                 <span className="text-gray-600">·</span>
                 <span><span className={`font-semibold tabular-nums ${totalSpent > totalBudget ? 'text-red-400' : 'text-blue-400'}`}>${Math.round(totalSpent).toLocaleString()}</span> spent</span>
               </p>
-            )}
-            {!isCurrentMonth && (
-              <button onClick={() => { setYear(currentYear); setMonth(currentMonth) }}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-0.5">
-                Back to current month
-              </button>
             )}
           </div>
           <button onClick={nextMonth} className="p-1.5 text-gray-400 hover:text-white transition-colors">
