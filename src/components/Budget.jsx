@@ -124,8 +124,8 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
           <div className="text-center">
             <p className="text-xl font-semibold text-white">{monthLabel}</p>
             {totalBudget > 0 && (
-              <p className="text-sm font-medium text-white tabular-nums mt-1">
-                ${totalSpent.toLocaleString()} <span className="text-gray-400">/ ${totalBudget.toLocaleString()}</span>
+              <p className="text-sm text-gray-400 mt-1">
+                <span className="text-white font-semibold tabular-nums">${totalBudget.toLocaleString()}</span> monthly budget
               </p>
             )}
             {!isCurrentMonth && (
