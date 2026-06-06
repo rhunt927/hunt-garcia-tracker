@@ -96,6 +96,9 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
       return { category: b.category, monthly_limit: b.monthly_limit, spent, pct }
     }).sort((a, b) => b.pct - a.pct)
 
+    const totalBudget = budgetedRows.reduce((s, r) => s + r.monthly_limit, 0)
+    const totalSpent = budgetedRows.reduce((s, r) => s + r.spent, 0)
+
     const budgetedNames = new Set(yearBudgets.map(b => b.category))
 
     // Unbudgeted categories that have spending this month — call these out prominently
@@ -120,6 +123,11 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
           </button>
           <div className="text-center">
             <p className="text-xl font-semibold text-white">{monthLabel}</p>
+            {totalBudget > 0 && (
+              <p className="text-xs text-gray-400 tabular-nums mt-0.5">
+                ${totalSpent.toFixed(0)} <span className="text-gray-600">/ ${totalBudget.toFixed(0)}</span>
+              </p>
+            )}
             {!isCurrentMonth && (
               <button onClick={() => { setYear(currentYear); setMonth(currentMonth) }}
                 className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-0.5">
