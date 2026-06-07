@@ -37,19 +37,8 @@
 
 ## Nice to Have
 
-- [ ] **Dashboard spending sparkline**
-  A compact mini chart on the dashboard showing your spending trend over the last 6 months without
-  having to open Reports. Think of the tiny line graphs in a stock app — at a glance you'd see
-  whether spending is trending up or down for the month.
+- [x] **Dashboard spending sparkline** — already exists as the Cash Flow 12-month chart on the dashboard
 
-- [ ] **Swipe to delete/edit on mobile**
-  On iPhone/iPad, swipe left on a transaction row to reveal Delete and Edit buttons — the same
-  gesture used in Mail, Messages, and Reminders. More natural than tapping the small pencil/trash
-  icons. Requires touch event handling in ExpenseList rows.
+- [x] **Swipe to delete/edit on mobile (2026-06-07)** — swipe left on any transaction row to reveal blue Edit and red Delete buttons; snaps open/closed; tap row to dismiss; desktop pencil/trash icons still present
 
-- [ ] **PWA push notifications for budget alerts**
-  Since the app is installed as a PWA, it can send native notifications even when the browser
-  is closed. The idea: when you hit 80% or 100% of a category budget mid-month, the app fires
-  a notification like "You've spent $480 of your $500 Dining budget for June." Requires a
-  service worker notification setup and a background check (either on app open or via a
-  scheduled sync). Needs user permission grant on first use.
+- [x] **Budget alert notifications on app open (2026-06-07)** — on each app open, checks all budgeted categories for the current month; fires a native Notification at 80% and again at 100%+ (over budget); each alert shown once per month per category via localStorage; requests permission on first alert

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft, RefreshCw, Scissors } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { toTitleCase } from '../lib/utils'
@@ -296,6 +296,8 @@ function parseSplits(raw) {
   try { return JSON.parse(raw) } catch { return null }
 }
 
+const SWIPE_OPEN = 120
+
 function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEdit, onDelete }) {
   let dateLabel = e.date
   try { dateLabel = format(parseISO(e.date), 'MMM d, yyyy') } catch {}
@@ -304,72 +306,120 @@ function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEd
   const amountPrefix = isIncome ? '+' : ''
   const splits = e.splits ? parseSplits(e.splits) : null
 
+  const [swipeX, setSwipeX] = useState(0)
+  const touchStartX = useRef(null)
+  const isOpen = swipeX >= SWIPE_OPEN
+
+  function onTouchStart(ev) {
+    touchStartX.current = ev.touches[0].clientX
+  }
+  function onTouchMove(ev) {
+    if (touchStartX.current === null) return
+    const delta = touchStartX.current - ev.touches[0].clientX
+    setSwipeX(Math.max(0, Math.min(delta, SWIPE_OPEN)))
+  }
+  function onTouchEnd() {
+    setSwipeX(swipeX >= SWIPE_OPEN / 2 ? SWIPE_OPEN : 0)
+    touchStartX.current = null
+  }
+  function closeSwipe() { setSwipeX(0) }
+
   return (
-    <div className={`bg-gray-900/80 backdrop-blur-sm rounded-xl border px-4 py-3 flex items-start gap-3 transition-colors ${selected ? 'border-blue-500/50 bg-blue-900/10' : 'border-white/10'}`}>
-      <button onClick={onToggle} className="mt-0.5 shrink-0 text-gray-500 hover:text-white transition-colors">
-        {selected ? <CheckSquare size={15} className="text-blue-400" /> : <Square size={15} />}
-      </button>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="font-medium text-white truncate">{e.merchant || e.description || 'Untitled'}</span>
-          <span className={`${amountColor} font-semibold whitespace-nowrap`}>
-            {amountPrefix}{e.currency !== 'USD'
-              ? `${e.amount.toFixed(2)} ${e.currency}`
-              : `$${e.amount_usd.toFixed(2)}`}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-gray-500">{dateLabel}</span>
-          {e.type && e.type !== 'expense' && (
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              isTransfer ? 'bg-gray-700/50 text-gray-500 border border-gray-600/50' :
-              isIncome   ? 'bg-green-900/50 text-green-400' :
-                           'bg-gray-800 text-gray-400'
-            }`}>
-              {e.type}
-            </span>
-          )}
-          {splits ? (
-            splits.map((sp, i) => (
-              <span key={i} className="text-xs bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Scissors size={9} />
-                {sp.category || '—'} ${(sp.amount_usd ?? 0).toFixed(2)}{sp.description ? ` · ${sp.description}` : ''}
-              </span>
-            ))
-          ) : e.category ? (
-            <span className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">
-              {e.category}
-            </span>
-          ) : null}
-          {e.is_recurring ? <RefreshCw size={11} className="text-purple-400 shrink-0" title="Recurring" /> : null}
-          {e.payment_method && (
-            <span className="text-xs text-gray-600">{e.payment_method}</span>
-          )}
-          {e.currency !== 'USD' && (
-            <span className="text-xs text-gray-600">≈ ${e.amount_usd.toFixed(2)} USD</span>
-          )}
-        </div>
-        {e.notes && <p className="text-xs text-gray-600 mt-1 truncate">{e.notes}</p>}
-      </div>
-
-      <div className="flex items-center gap-1 shrink-0">
+    <div className="relative rounded-xl overflow-hidden">
+      {/* Swipe action buttons revealed underneath */}
+      <div className="absolute inset-y-0 right-0 flex" style={{ width: SWIPE_OPEN }}>
         <button
-          onClick={() => onEdit(e)}
-          className="p-1.5 text-gray-500 hover:text-white transition-colors"
-          title="Edit"
+          onClick={() => { closeSwipe(); onEdit(e) }}
+          className="flex-1 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
         >
-          <Pencil size={14} />
+          <Pencil size={15} />
         </button>
         <button
           onClick={() => {
+            closeSwipe()
             if (window.confirm(`Delete "${e.merchant || e.description || 'this transaction'}"?`)) onDelete(e.id)
           }}
-          className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-          title="Delete"
+          className="flex-1 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors"
         >
-          <Trash2 size={14} />
+          <Trash2 size={15} />
         </button>
+      </div>
+
+      {/* Main row — slides left on swipe */}
+      <div
+        style={{ transform: `translateX(-${swipeX}px)`, transition: touchStartX.current ? 'none' : 'transform 0.2s ease' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={isOpen ? closeSwipe : undefined}
+        className={`relative bg-gray-900/80 backdrop-blur-sm border px-4 py-3 flex items-start gap-3 ${selected ? 'border-blue-500/50 bg-blue-900/10' : 'border-white/10'}`}
+      >
+        <button onClick={ev => { ev.stopPropagation(); onToggle() }} className="mt-0.5 shrink-0 text-gray-500 hover:text-white transition-colors">
+          {selected ? <CheckSquare size={15} className="text-blue-400" /> : <Square size={15} />}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-medium text-white truncate">{e.merchant || e.description || 'Untitled'}</span>
+            <span className={`${amountColor} font-semibold whitespace-nowrap`}>
+              {amountPrefix}{e.currency !== 'USD'
+                ? `${e.amount.toFixed(2)} ${e.currency}`
+                : `$${e.amount_usd.toFixed(2)}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs text-gray-500">{dateLabel}</span>
+            {e.type && e.type !== 'expense' && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                isTransfer ? 'bg-gray-700/50 text-gray-500 border border-gray-600/50' :
+                isIncome   ? 'bg-green-900/50 text-green-400' :
+                             'bg-gray-800 text-gray-400'
+              }`}>
+                {e.type}
+              </span>
+            )}
+            {splits ? (
+              splits.map((sp, i) => (
+                <span key={i} className="text-xs bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Scissors size={9} />
+                  {sp.category || '—'} ${(sp.amount_usd ?? 0).toFixed(2)}{sp.description ? ` · ${sp.description}` : ''}
+                </span>
+              ))
+            ) : e.category ? (
+              <span className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">
+                {e.category}
+              </span>
+            ) : null}
+            {e.is_recurring ? <RefreshCw size={11} className="text-purple-400 shrink-0" title="Recurring" /> : null}
+            {e.payment_method && (
+              <span className="text-xs text-gray-600">{e.payment_method}</span>
+            )}
+            {e.currency !== 'USD' && (
+              <span className="text-xs text-gray-600">≈ ${e.amount_usd.toFixed(2)} USD</span>
+            )}
+          </div>
+          {e.notes && <p className="text-xs text-gray-600 mt-1 truncate">{e.notes}</p>}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={ev => { ev.stopPropagation(); onEdit(e) }}
+            className="p-1.5 text-gray-500 hover:text-white transition-colors"
+            title="Edit"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={ev => {
+              ev.stopPropagation()
+              if (window.confirm(`Delete "${e.merchant || e.description || 'this transaction'}"?`)) onDelete(e.id)
+            }}
+            className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
     </div>
   )
