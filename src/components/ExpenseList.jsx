@@ -334,7 +334,7 @@ function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEd
             splits.map((sp, i) => (
               <span key={i} className="text-xs bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 px-1.5 py-0.5 rounded flex items-center gap-1">
                 <Scissors size={9} />
-                {sp.category || '—'} ${(sp.amount_usd ?? 0).toFixed(2)}
+                {sp.category || '—'} ${(sp.amount_usd ?? 0).toFixed(2)}{sp.description ? ` · ${sp.description}` : ''}
               </span>
             ))
           ) : e.category ? (

@@ -10,7 +10,7 @@ function parseSplits(raw) {
 
 const CURRENCIES = ['USD', 'PAB', 'EUR']
 
-function SplitSection({ splits, setSplits, categories, onAddCategory, totalUsd }) {
+function SplitSection({ splits, setSplits, categories, onAddCategory, totalUsd, defaultCategory }) {
   const allocated = splits.reduce((s, sp) => s + (parseFloat(sp.amount_usd) || 0), 0)
   const remaining = totalUsd - allocated
   const overBudget = remaining < -0.005
@@ -19,33 +19,68 @@ function SplitSection({ splits, setSplits, categories, onAddCategory, totalUsd }
     setSplits(prev => prev.map((sp, idx) => idx === i ? { ...sp, [field]: value } : sp))
   }
 
+  function addSplit() {
+    setSplits(prev => [...prev, { category: defaultCategory, amount_usd: '', description: '' }])
+  }
+
+  function removeSplit(i) {
+    setSplits(prev => prev.filter((_, idx) => idx !== i))
+  }
+
   return (
     <div className="space-y-2 bg-yellow-900/10 border border-yellow-500/20 rounded-xl p-3">
       <p className="text-xs text-yellow-400/80 font-medium mb-2">Split transaction</p>
       {splits.map((sp, i) => (
-        <div key={i} className="grid grid-cols-2 gap-2">
-          <CategorySelect
-            value={sp.category}
-            onChange={v => updateSplit(i, 'category', v)}
-            categories={categories}
-            onAdd={onAddCategory}
-            className="w-full py-1.5 px-3 text-sm rounded-lg"
-          />
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-            <input
-              type="number"
-              value={sp.amount_usd}
-              onChange={e => updateSplit(i, 'amount_usd', e.target.value)}
-              placeholder="0.00"
-              min="0"
-              step="0.01"
-              className="w-full bg-gray-800 border border-white/10 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500"
-            />
+        <div key={i} className="space-y-1.5">
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 grid grid-cols-2 gap-2">
+              <CategorySelect
+                value={sp.category}
+                onChange={v => updateSplit(i, 'category', v)}
+                categories={categories}
+                onAdd={onAddCategory}
+                className="w-full py-1.5 px-3 text-sm rounded-lg"
+              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  value={sp.amount_usd}
+                  onChange={e => updateSplit(i, 'amount_usd', e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500"
+                />
+              </div>
+            </div>
+            {splits.length > 2 && (
+              <button
+                type="button"
+                onClick={() => removeSplit(i)}
+                className="text-gray-600 hover:text-red-400 transition-colors shrink-0"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
+          <input
+            type="text"
+            value={sp.description ?? ''}
+            onChange={e => updateSplit(i, 'description', e.target.value)}
+            placeholder="Description (optional)"
+            className="w-full bg-gray-800 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500"
+          />
         </div>
       ))}
-      <div className={`text-xs mt-1 flex gap-3 ${overBudget ? 'text-red-400' : 'text-gray-500'}`}>
+      <button
+        type="button"
+        onClick={addSplit}
+        className="text-xs text-yellow-500/70 hover:text-yellow-400 transition-colors mt-1"
+      >
+        + Add another split
+      </button>
+      <div className={`text-xs flex gap-3 ${overBudget ? 'text-red-400' : 'text-gray-500'}`}>
         <span>Total: <span className="text-white">${totalUsd.toFixed(2)}</span></span>
         <span>Allocated: <span className={overBudget ? 'text-red-400 font-semibold' : 'text-white'}>${allocated.toFixed(2)}</span></span>
         {!overBudget && <span>Remaining: <span className="text-white">${remaining.toFixed(2)}</span></span>}
@@ -63,8 +98,8 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
   const [splitEnabled, setSplitEnabled] = useState(!!existingSplits)
   const defaultCategory = initialValues?.category ?? categories[0] ?? ''
   const [splits, setSplits] = useState(existingSplits ?? [
-    { category: defaultCategory, amount_usd: '' },
-    { category: defaultCategory, amount_usd: '' },
+    { category: defaultCategory, amount_usd: '', description: '' },
+    { category: defaultCategory, amount_usd: '', description: '' },
   ])
 
   const defaultType = transactionTypes?.[0]?.name ?? 'expense'
@@ -109,7 +144,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
     let splitsValue = null
 
     if (splitEnabled) {
-      const parsed = splits.map(s => ({ category: s.category, amount_usd: parseFloat(s.amount_usd) || 0 }))
+      const parsed = splits.map(s => ({ category: s.category, amount_usd: parseFloat(s.amount_usd) || 0, description: s.description?.trim() || null }))
       const total = parsed.reduce((s, sp) => s + sp.amount_usd, 0)
       if (total > amountUsdVal + 0.005) return // guard: don't save if over total
       splitsValue = JSON.stringify(parsed)
@@ -279,6 +314,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
             categories={categories}
             onAddCategory={onAddCategory}
             totalUsd={amountUsd ?? 0}
+            defaultCategory={defaultCategory}
           />
         ) : (
           <div className="grid grid-cols-2 gap-3">
