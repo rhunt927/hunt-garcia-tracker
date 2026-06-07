@@ -61,9 +61,10 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
 
   const existingSplits = initialValues?.splits ? parseSplits(initialValues.splits) : null
   const [splitEnabled, setSplitEnabled] = useState(!!existingSplits)
+  const defaultCategory = initialValues?.category ?? categories[0] ?? ''
   const [splits, setSplits] = useState(existingSplits ?? [
-    { category: categories[0] ?? '', amount_usd: '' },
-    { category: categories[1] ?? categories[0] ?? '', amount_usd: '' },
+    { category: defaultCategory, amount_usd: '' },
+    { category: defaultCategory, amount_usd: '' },
   ])
 
   const defaultType = transactionTypes?.[0]?.name ?? 'expense'
