@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { Reports } from './components/Reports'
 import { Budget } from './components/Budget'
+import { Cash } from './components/Cash'
 import { useAuth } from './hooks/useAuth'
 import { useDatabase } from './hooks/useDatabase'
 import { LoginScreen } from './components/LoginScreen'
@@ -116,6 +117,7 @@ export default function App() {
   const transactionTypes = db ? query('SELECT name, is_income, is_transfer FROM transaction_types ORDER BY is_income, name') : []
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
   const budgets = db ? query('SELECT category, year, monthly_limit FROM budgets ORDER BY category') : []
+  const cashEntries = db ? query('SELECT * FROM cash_entries ORDER BY created_at ASC') : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
@@ -198,6 +200,24 @@ export default function App() {
     } else {
       run('DELETE FROM budgets WHERE category=?', [category])
     }
+    await save()
+  }, [run, save])
+
+  // Cash entry callbacks
+  const handleAddCashEntry = useCallback(async ({ description, amount }) => {
+    const now = new Date().toISOString()
+    run('INSERT INTO cash_entries VALUES (?,?,?,?,?)', [crypto.randomUUID(), description ?? null, amount, now, now])
+    await save()
+  }, [run, save])
+
+  const handleUpdateCashEntry = useCallback(async (id, { description, amount }) => {
+    const now = new Date().toISOString()
+    run('UPDATE cash_entries SET description=?, amount=?, updated_at=? WHERE id=?', [description ?? null, amount, now, id])
+    await save()
+  }, [run, save])
+
+  const handleDeleteCashEntry = useCallback(async (id) => {
+    run('DELETE FROM cash_entries WHERE id=?', [id])
     await save()
   }, [run, save])
 
@@ -386,6 +406,14 @@ export default function App() {
                 onCancel={() => { setFormState(returnTo); setReturnTo(null) }}
                 {...categoryProps}
               />
+            ) : formState === 'cash' ? (
+              <Cash
+                entries={cashEntries}
+                onAdd={handleAddCashEntry}
+                onUpdate={handleUpdateCashEntry}
+                onDelete={handleDeleteCashEntry}
+                onBack={() => setFormState(null)}
+              />
             ) : formState === 'budget' ? (
               <Budget
                 categories={categories}
@@ -432,6 +460,7 @@ export default function App() {
                 expenses={expenses}
                 transactionTypes={transactionTypes}
                 budgets={budgets}
+                cashTotal={cashEntries.reduce((s, e) => s + (e.amount ?? 0), 0)}
                 selectedYear={dashboardYear}
                 selectedMonth={dashboardMonth}
                 setSelectedYear={setDashboardYear}
@@ -441,6 +470,7 @@ export default function App() {
                 onImportCSV={() => setFormState('csv')}
                 onViewReports={(filters) => { setReportFilters(filters || {}); setFormState('reports') }}
                 onViewBudget={() => { setFormState('budget') }}
+                onViewCash={() => setFormState('cash')}
               />
             )}
           </>
@@ -511,7 +541,7 @@ function CashFlowChart({ expenses, incomeTypeNames, transferTypeNames }) {
   )
 }
 
-function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget }) {
+function Dashboard({ expenses, transactionTypes, budgets, cashTotal, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget, onViewCash }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
@@ -570,27 +600,38 @@ function Dashboard({ expenses, transactionTypes, budgets, selectedYear, selected
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => onViewList({ ...monthFilters, filterType: '__income__' })}
-          className="bg-green-900/30 hover:bg-green-900/50 border border-green-500/30 rounded-2xl p-5 text-left transition-colors"
+          className="bg-green-900/30 hover:bg-green-900/50 border border-green-500/30 rounded-2xl p-4 text-left transition-colors"
         >
-          <div className="flex items-center gap-2 text-green-400 mb-2">
-            <TrendingUp size={18} />
-            <span className="text-sm font-medium">Income</span>
+          <div className="flex items-center gap-1.5 text-green-400 mb-2">
+            <TrendingUp size={15} />
+            <span className="text-xs font-medium">Income</span>
           </div>
-          <p className="text-2xl font-bold text-white">${totalIncome.toFixed(2)}</p>
+          <p className="text-xl font-bold text-white">${totalIncome.toFixed(0)}</p>
         </button>
 
         <button
           onClick={() => onViewList({ ...monthFilters, filterType: '__expense__' })}
-          className="bg-gray-900/60 hover:bg-gray-900/80 border border-white/10 rounded-2xl p-5 text-left transition-colors"
+          className="bg-gray-900/60 hover:bg-gray-900/80 border border-white/10 rounded-2xl p-4 text-left transition-colors"
         >
-          <div className="flex items-center gap-2 text-orange-300 mb-2">
-            <TrendingDown size={18} />
-            <span className="text-sm font-medium">Expenses</span>
+          <div className="flex items-center gap-1.5 text-orange-300 mb-2">
+            <TrendingDown size={15} />
+            <span className="text-xs font-medium">Expenses</span>
           </div>
-          <p className="text-2xl font-bold text-white">${totalExpenses.toFixed(2)}</p>
+          <p className="text-xl font-bold text-white">${totalExpenses.toFixed(0)}</p>
+        </button>
+
+        <button
+          onClick={onViewCash}
+          className="bg-teal-900/30 hover:bg-teal-900/50 border border-teal-500/30 rounded-2xl p-4 text-left transition-colors"
+        >
+          <div className="flex items-center gap-1.5 text-teal-400 mb-2">
+            <Wallet size={15} />
+            <span className="text-xs font-medium">Cash</span>
+          </div>
+          <p className="text-xl font-bold text-white">${cashTotal.toFixed(0)}</p>
         </button>
       </div>
 
