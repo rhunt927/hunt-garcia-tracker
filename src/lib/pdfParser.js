@@ -37,18 +37,20 @@ export async function parsePDF(file) {
   }
 
   const bank = detectBank(allLines)
-  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Schwab, Bank of America, Chase, Discover.')
+  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover.')
 
   return parseStatementLines(allLines, bank)
 }
 
 function detectBank(lines) {
   const header = lines.slice(0, 40).join(' ')
+  if (/apple card|goldman sachs/i.test(header)) return APPLE
   if (/charles schwab|schwab bank|schwab one/i.test(header)) return SCHWAB
   if (/bank of america/i.test(header)) return BOA
   if (/jpmorgan chase|chase bank|chase card|chase\.com/i.test(header)) return CHASE
   if (/discover bank|discover card|discover\.com/i.test(header)) return DISCOVER
   const full = lines.join(' ')
+  if (/apple card/i.test(full)) return APPLE
   if (/schwab/i.test(full)) return SCHWAB
   if (/bank of america/i.test(full)) return BOA
   if (/\bchase\b/i.test(full)) return CHASE
@@ -92,6 +94,16 @@ const DISCOVER = {
   creditSection: /^(payments and credits)/i,
   debitSection: /^(purchases|transactions)/i,
   skipSection: /^(total purchases|total transactions|total payments)/i,
+}
+
+const APPLE = {
+  name: 'Apple Card',
+  paymentMethod: 'Apple Card',
+  source: 'pdf_apple',
+  creditSection: /^(payments and credits|payments)/i,
+  debitSection: /^(transactions|purchases)/i,
+  skipSection: /^(total|account summary|interest charges|apr)/i,
+  monthNameDates: true,
 }
 
 // ─── Core parser ─────────────────────────────────────────────────────────────
@@ -175,37 +187,50 @@ function keywordOverride(description, sectionIsCredit) {
   return sectionIsCredit
 }
 
+const MONTH_ABBR = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
+
 // Parse a single transaction line.
 // isCredit: true/false from section context, or null to auto-classify from description keywords.
 function parseTxnLine(line, year, bank, isCredit) {
-  const dateMatch = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)/)
-  if (!dateMatch) return null
+  let mm, dd, yyyy, rest
 
-  let rest = line.slice(dateMatch[1].length).trim()
-  // Strip a second date if present at start (post-date column on credit card statements)
-  rest = rest.replace(/^\d{2}\/\d{2}(?:\/\d{2,4})?\s+/, '')
+  // Try numeric date: MM/DD or MM/DD/YY or MM/DD/YYYY
+  const numMatch = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)/)
+  if (numMatch) {
+    const parts = numMatch[1].split('/')
+    mm = parts[0].padStart(2, '0')
+    dd = parts[1].padStart(2, '0')
+    yyyy = parts[2] ? (parts[2].length === 2 ? '20' + parts[2] : parts[2]) : String(year)
+    rest = line.slice(numMatch[1].length).trim()
+    // Strip a second date if present (post-date column on credit card statements)
+    rest = rest.replace(/^\d{2}\/\d{2}(?:\/\d{2,4})?\s+/, '')
+  } else if (bank.monthNameDates) {
+    // Month-name date: "Jan 01" or "Jan 1" or "January 01"
+    const monMatch = line.match(/^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:,?\s*(\d{4}))?/i)
+    if (!monMatch) return null
+    const monthNum = MONTH_ABBR[monMatch[1].slice(0, 3).toLowerCase()]
+    if (!monthNum) return null
+    mm = String(monthNum).padStart(2, '0')
+    dd = monMatch[2].padStart(2, '0')
+    yyyy = monMatch[3] ?? String(year)
+    rest = line.slice(monMatch[0].length).trim()
+  } else {
+    return null
+  }
 
-  // Find first dollar amount
-  const amountMatch = rest.match(/(-?[\d,]+\.\d{2})/)
+  // Find first dollar amount (may be preceded by $ sign)
+  const amountMatch = rest.match(/\$?\s*(-?[\d,]+\.\d{2})/)
   if (!amountMatch) return null
 
   const rawAmount = parseFloat(amountMatch[1].replace(/,/g, ''))
   const amount = Math.abs(rawAmount)
   if (!amount || amount <= 0) return null
 
-  const description = rest.slice(0, amountMatch.index).trim()
+  const description = rest.slice(0, amountMatch.index).trim().replace(/\s*\$$/, '').trim()
   if (!description || description.length < 2) return null
 
   // Skip obvious summary/balance lines
   if (/^(beginning|ending|total|balance|interest paid|service fee|new balance|minimum)/i.test(description)) return null
-
-  // Normalize date to YYYY-MM-DD
-  const parts = dateMatch[1].split('/')
-  const mm = parts[0].padStart(2, '0')
-  const dd = parts[1].padStart(2, '0')
-  const yyyy = parts[2]
-    ? (parts[2].length === 2 ? '20' + parts[2] : parts[2])
-    : String(year)
 
   // null means auto-classify from description keywords
   const credit = isCredit === null ? keywordOverride(description, false) : !!isCredit
