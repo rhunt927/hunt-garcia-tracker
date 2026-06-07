@@ -3,7 +3,8 @@
 ## Done ✓
 
 - [x] **Split transactions (2026-06-07)** — "Split" toggle (scissors icon) in transaction form; unlimited rows (starts with 2, + Add another / X to remove); each row has category, USD amount, optional description; split amounts enforced ≤ transaction total; yellow split badges in transaction list; Budget and Reports decompose splits by category for accurate spending attribution; both split rows default to original transaction's category
-- [x] **Apple Card PDF import (2026-06-07)** — detects "Apple Card"/"Goldman Sachs" in PDF header; handles month-name date format (Jan 01); correctly picks last dollar column (actual charge) and ignores first column (Daily Cash cashback)
+- [x] **Apple Card PDF import (2026-06-07)** — detects "Apple Card"/"Goldman Sachs" in PDF header; handles month-name date format (Jan 01); correctly picks last dollar column (actual charge) and ignores first column (Daily Cash cashback); verified working on real statements
+- [x] **GitHub repo renamed** — remote and vite base both updated to `hunt-garcia-tracker`; live at [rhunt927.github.io/hunt-garcia-tracker](https://rhunt927.github.io/hunt-garcia-tracker)
 - [x] Budget tracking — dedicated Budget view from dashboard; per-category, per-year limits; progress bars on dashboard filtered to viewed year
 - [x] Recurring flag — toggle in transaction form, purple ↺ icon in list
 - [x] Search — already existed in Transactions view
@@ -20,18 +21,6 @@
 
 ---
 
-## Known Issues / Needs Verification
-
-- [ ] **Local file import error on mobile** — user got an error selecting a file from iOS Files app.
-  Need the actual error message to diagnose. Likely a bank format not recognized by the parser,
-  or the PDF worker still failing. Ask user to share the error text next session.
-
-- [ ] **Drive import: sign out/in required** — after the drive.readonly scope change, existing
-  sessions will see "sign out and sign back in" prompt until they re-auth. First use after
-  re-auth should show Drive files correctly. Needs verification on mobile.
-
----
-
 ## Medium Priority
 
 - [ ] **Year-over-year comparison in Reports**
@@ -42,27 +31,25 @@
   alongside the DB and link it to the transaction.
 
 - [ ] **Merchant autocomplete**
-  As you type in the Merchant field, suggest previously used merchant names. Reduces repetitive entry.
-
----
-
-## Low Priority / Housekeeping
-
-- [ ] **Rename GitHub repo and URL**
-  Repo is still `expense-tracker` / URL is still `rhunt927.github.io/expense-tracker`.
-  Rename the GitHub repo to `hg-tracker` (or similar), update `base` in `vite.config.js`,
-  update `index.html` favicon/icon paths, and re-deploy. Note: old URL will break for anyone
-  who has the PWA installed — will need to uninstall/reinstall.
+  As you type in the Merchant field, suggest previously used merchant names from past transactions. Reduces repetitive entry.
 
 ---
 
 ## Nice to Have
 
 - [ ] **Dashboard spending sparkline**
-  Small 6-month trend line on the dashboard showing spending at a glance without opening Reports.
+  A compact mini chart on the dashboard showing your spending trend over the last 6 months without
+  having to open Reports. Think of the tiny line graphs in a stock app — at a glance you'd see
+  whether spending is trending up or down for the month.
 
 - [ ] **Swipe to delete/edit on mobile**
-  Swipe left on a transaction row to reveal delete/edit actions — more natural on iPhone/iPad.
+  On iPhone/iPad, swipe left on a transaction row to reveal Delete and Edit buttons — the same
+  gesture used in Mail, Messages, and Reminders. More natural than tapping the small pencil/trash
+  icons. Requires touch event handling in ExpenseList rows.
 
-- [ ] **PWA push notifications**
-  Alert when approaching or exceeding a budget limit for the month.
+- [ ] **PWA push notifications for budget alerts**
+  Since the app is installed as a PWA, it can send native notifications even when the browser
+  is closed. The idea: when you hit 80% or 100% of a category budget mid-month, the app fires
+  a notification like "You've spent $480 of your $500 Dining budget for June." Requires a
+  service worker notification setup and a background check (either on app open or via a
+  scheduled sync). Needs user permission grant on first use.
