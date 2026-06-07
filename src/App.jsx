@@ -61,24 +61,24 @@ export default function App() {
     try {
       if (formState === 'add') {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             expense.id, expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.category, expense.payment_method, expense.receipt_filename,
             expense.source, expense.notes, expense.created_at, expense.updated_at,
-            expense.type ?? 'Expense', expense.is_recurring ?? 0,
+            expense.type ?? 'Expense', expense.is_recurring ?? 0, expense.splits ?? null,
           ]
         )
       } else {
         run(
           `UPDATE expenses SET date=?, merchant=?, description=?, amount=?, currency=?,
-           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=?, is_recurring=? WHERE id=?`,
+           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=?, is_recurring=?, splits=? WHERE id=?`,
           [
             expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.type, expense.category, expense.payment_method, expense.notes,
-            expense.updated_at, expense.is_recurring ?? 0, expense.id,
+            expense.updated_at, expense.is_recurring ?? 0, expense.splits ?? null, expense.id,
           ]
         )
       }
@@ -202,10 +202,10 @@ export default function App() {
       }
       for (const e of rows) {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [e.id, e.date, e.merchant, e.description, e.amount, e.currency,
            e.amount_usd, e.category, e.payment_method, e.receipt_filename,
-           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0]
+           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0, null]
         )
       }
       await save()

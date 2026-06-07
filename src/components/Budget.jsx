@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Check, X, Pencil } from 'lucide-react'
 
+function parseSplits(raw) {
+  try { return JSON.parse(raw) } catch { return null }
+}
+
 export function Budget({ categories, budgets, expenses, transactionTypes, onSetBudget, onDeleteBudget, onAddCategory, onEditExpense, onBack, initialYear, initialMonth }) {
   const now = new Date()
   const currentYear = now.getFullYear()
@@ -46,7 +50,13 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
     .filter(e => e.date?.startsWith(`${year}-${mStr}`) && !incomeTypeNames.has(e.type) && !transferTypeNames.has(e.type))
 
   function getSpent(category) {
-    return monthExpenses.filter(e => e.category === category).reduce((s, e) => s + (e.amount_usd ?? 0), 0)
+    return monthExpenses.reduce((s, e) => {
+      const splits = e.splits ? parseSplits(e.splits) : null
+      if (splits) {
+        return s + splits.filter(sp => sp.category === category).reduce((sum, sp) => sum + (sp.amount_usd ?? 0), 0)
+      }
+      return e.category === category ? s + (e.amount_usd ?? 0) : s
+    }, 0)
   }
 
   function getBudget(category) {
@@ -233,7 +243,15 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
     const limit = budget?.monthly_limit ?? 0
     const pct = limit > 0 ? spent / limit : 0
     const categoryTxns = monthExpenses
-      .filter(e => e.category === selectedCategory)
+      .flatMap(e => {
+        const splits = e.splits ? parseSplits(e.splits) : null
+        if (splits) {
+          const match = splits.find(sp => sp.category === selectedCategory)
+          if (match) return [{ ...e, _splitAmount: match.amount_usd }]
+          return []
+        }
+        return e.category === selectedCategory ? [e] : []
+      })
       .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 
     return (
@@ -305,7 +323,10 @@ export function Budget({ categories, budgets, expenses, transactionTypes, onSetB
                   <p className="text-xs text-gray-500">{txn.date}</p>
                 </div>
                 <div className="text-right ml-3 shrink-0">
-                  <p className="text-sm font-medium text-white tabular-nums">${(txn.amount_usd ?? 0).toFixed(2)}</p>
+                  <p className="text-sm font-medium text-white tabular-nums">
+                    ${(txn._splitAmount ?? txn.amount_usd ?? 0).toFixed(2)}
+                    {txn._splitAmount != null && <span className="text-xs text-gray-500 ml-1">split</span>}
+                  </p>
                   {txn.payment_method && <p className="text-xs text-gray-600">{txn.payment_method}</p>}
                 </div>
               </button>

@@ -11,6 +11,20 @@ const COLORS = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
 ]
 
+function parseSplits(raw) {
+  try { return JSON.parse(raw) } catch { return null }
+}
+
+function expandForCategory(expenses) {
+  return expenses.flatMap(e => {
+    const splits = e.splits ? parseSplits(e.splits) : null
+    if (splits && splits.length > 0) {
+      return splits.map(sp => ({ ...e, category: sp.category || 'Other', amount_usd: sp.amount_usd ?? 0 }))
+    }
+    return [e]
+  })
+}
+
 export function Reports({ expenses, transactionTypes, categories, onBack, initialFrom, initialTo }) {
   const today = new Date()
   const [dateFrom, setDateFrom] = useState(initialFrom ?? format(startOfMonth(today), 'yyyy-MM-dd'))
@@ -48,8 +62,9 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
 
   // Monthly bar chart data
   const chartData = useMemo(() => {
+    const rows = groupBy === 'category' ? expandForCategory(filtered) : filtered
     const months = {}
-    filtered.forEach(e => {
+    rows.forEach(e => {
       try {
         const month = format(startOfMonth(parseISO(e.date)), 'yyyy-MM')
         if (!months[month]) months[month] = {}
@@ -73,8 +88,9 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
 
   // Pie chart data — total per group key across the date range
   const pieData = useMemo(() => {
+    const rows = groupBy === 'category' ? expandForCategory(filtered) : filtered
     const map = {}
-    filtered.forEach(e => {
+    rows.forEach(e => {
       const key = groupBy === 'category' ? (e.category || 'Other') : (e.type || 'Expense')
       map[key] = (map[key] ?? 0) + (e.amount_usd ?? 0)
     })
@@ -85,8 +101,9 @@ export function Reports({ expenses, transactionTypes, categories, onBack, initia
 
   // Category breakdown table
   const breakdown = useMemo(() => {
+    const rows = expandForCategory(filtered)
     const map = {}
-    filtered.forEach(e => {
+    rows.forEach(e => {
       const key = e.category || 'Other'
       if (!map[key]) map[key] = { income: 0, expenses: 0 }
       if (incomeTypeNames.has(e.type)) map[key].income += e.amount_usd ?? 0

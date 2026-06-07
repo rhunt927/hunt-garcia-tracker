@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft, RefreshCw } from 'lucide-react'
+import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft, RefreshCw, Scissors } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { toTitleCase } from '../lib/utils'
 
@@ -292,12 +292,17 @@ export function ExpenseList({ expenses, categories, transactionTypes, onAdd, onE
   )
 }
 
+function parseSplits(raw) {
+  try { return JSON.parse(raw) } catch { return null }
+}
+
 function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEdit, onDelete }) {
   let dateLabel = e.date
   try { dateLabel = format(parseISO(e.date), 'MMM d, yyyy') } catch {}
 
   const amountColor = isIncome ? 'text-green-400' : isTransfer ? 'text-gray-400' : 'text-red-400'
   const amountPrefix = isIncome ? '+' : ''
+  const splits = e.splits ? parseSplits(e.splits) : null
 
   return (
     <div className={`bg-gray-900/80 backdrop-blur-sm rounded-xl border px-4 py-3 flex items-start gap-3 transition-colors ${selected ? 'border-blue-500/50 bg-blue-900/10' : 'border-white/10'}`}>
@@ -325,11 +330,18 @@ function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEd
               {e.type}
             </span>
           )}
-          {e.category && (
+          {splits ? (
+            splits.map((sp, i) => (
+              <span key={i} className="text-xs bg-yellow-900/40 text-yellow-300 border border-yellow-700/40 px-1.5 py-0.5 rounded flex items-center gap-1">
+                <Scissors size={9} />
+                {sp.category || '—'} ${(sp.amount_usd ?? 0).toFixed(2)}
+              </span>
+            ))
+          ) : e.category ? (
             <span className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">
               {e.category}
             </span>
-          )}
+          ) : null}
           {e.is_recurring ? <RefreshCw size={11} className="text-purple-400 shrink-0" title="Recurring" /> : null}
           {e.payment_method && (
             <span className="text-xs text-gray-600">{e.payment_method}</span>

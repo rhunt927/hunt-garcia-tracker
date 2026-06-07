@@ -1,14 +1,70 @@
 import { useState } from 'react'
-import { X, ScanLine, RefreshCw } from 'lucide-react'
+import { X, ScanLine, RefreshCw, Scissors } from 'lucide-react'
 import { ReceiptScanner } from './ReceiptScanner'
 import { CategorySelect } from './CategorySelect'
 import { toTitleCase } from '../lib/utils'
 
+function parseSplits(raw) {
+  try { return JSON.parse(raw) } catch { return null }
+}
+
 const CURRENCIES = ['USD', 'PAB', 'EUR']
+
+function SplitSection({ splits, setSplits, categories, onAddCategory, totalUsd }) {
+  const allocated = splits.reduce((s, sp) => s + (parseFloat(sp.amount_usd) || 0), 0)
+  const remaining = totalUsd - allocated
+  const overBudget = remaining < -0.005
+
+  function updateSplit(i, field, value) {
+    setSplits(prev => prev.map((sp, idx) => idx === i ? { ...sp, [field]: value } : sp))
+  }
+
+  return (
+    <div className="space-y-2 bg-yellow-900/10 border border-yellow-500/20 rounded-xl p-3">
+      <p className="text-xs text-yellow-400/80 font-medium mb-2">Split transaction</p>
+      {splits.map((sp, i) => (
+        <div key={i} className="grid grid-cols-2 gap-2">
+          <CategorySelect
+            value={sp.category}
+            onChange={v => updateSplit(i, 'category', v)}
+            categories={categories}
+            onAdd={onAddCategory}
+            className="w-full py-1.5 px-3 text-sm rounded-lg"
+          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <input
+              type="number"
+              value={sp.amount_usd}
+              onChange={e => updateSplit(i, 'amount_usd', e.target.value)}
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              className="w-full bg-gray-800 border border-white/10 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500"
+            />
+          </div>
+        </div>
+      ))}
+      <div className={`text-xs mt-1 flex gap-3 ${overBudget ? 'text-red-400' : 'text-gray-500'}`}>
+        <span>Total: <span className="text-white">${totalUsd.toFixed(2)}</span></span>
+        <span>Allocated: <span className={overBudget ? 'text-red-400 font-semibold' : 'text-white'}>${allocated.toFixed(2)}</span></span>
+        {!overBudget && <span>Remaining: <span className="text-white">${remaining.toFixed(2)}</span></span>}
+        {overBudget && <span className="font-semibold">Over by ${Math.abs(remaining).toFixed(2)}</span>}
+      </div>
+    </div>
+  )
+}
 
 export function ExpenseForm({ categories, paymentMethods, exchangeRates, transactionTypes, onSave, onCancel, initialValues, onAddCategory, onRenameCategory, onDeleteCategory }) {
   const today = new Date().toISOString().slice(0, 10)
   const [showScanner, setShowScanner] = useState(false)
+
+  const existingSplits = initialValues?.splits ? parseSplits(initialValues.splits) : null
+  const [splitEnabled, setSplitEnabled] = useState(!!existingSplits)
+  const [splits, setSplits] = useState(existingSplits ?? [
+    { category: categories[0] ?? '', amount_usd: '' },
+    { category: categories[1] ?? categories[0] ?? '', amount_usd: '' },
+  ])
 
   const defaultType = transactionTypes?.[0]?.name ?? 'expense'
 
@@ -48,6 +104,16 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
     e.preventDefault()
     if (!form.amount || isNaN(parseFloat(form.amount))) return
 
+    const amountUsdVal = toUsd(form.amount, form.currency)
+    let splitsValue = null
+
+    if (splitEnabled) {
+      const parsed = splits.map(s => ({ category: s.category, amount_usd: parseFloat(s.amount_usd) || 0 }))
+      const total = parsed.reduce((s, sp) => s + sp.amount_usd, 0)
+      if (total > amountUsdVal + 0.005) return // guard: don't save if over total
+      splitsValue = JSON.stringify(parsed)
+    }
+
     const now = new Date().toISOString()
     onSave({
       id: initialValues?.id ?? crypto.randomUUID(),
@@ -56,14 +122,15 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
       description: form.description.trim() || null,
       amount: parseFloat(form.amount),
       currency: form.currency,
-      amount_usd: toUsd(form.amount, form.currency),
+      amount_usd: amountUsdVal,
       type: form.type,
-      category: form.category || null,
+      category: splitEnabled ? null : (form.category || null),
       payment_method: form.payment_method || null,
       receipt_filename: initialValues?.receipt_filename ?? null,
       source: initialValues?.source ?? 'manual',
       notes: form.notes.trim() || null,
       is_recurring: form.is_recurring,
+      splits: splitsValue,
       created_at: initialValues?.created_at ?? now,
       updated_at: now,
     })
@@ -134,6 +201,18 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
             <RefreshCw size={13} />
             Recurring
           </button>
+          <button
+            type="button"
+            onClick={() => setSplitEnabled(s => !s)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+              splitEnabled
+                ? 'bg-yellow-600/30 border-yellow-500 text-yellow-300'
+                : 'bg-gray-800 border-white/10 text-gray-400 hover:text-white'
+            }`}
+          >
+            <Scissors size={13} />
+            Split
+          </button>
         </div>
 
         {/* Date + Merchant */}
@@ -192,17 +271,41 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
         )}
 
         {/* Category + Payment Method */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Category</label>
-            <CategorySelect
-              value={form.category}
-              onChange={v => set('category', v)}
-              categories={categories}
-              onAdd={onAddCategory}
-              className="w-full py-2 px-3 text-sm rounded-lg"
-            />
+        {splitEnabled ? (
+          <SplitSection
+            splits={splits}
+            setSplits={setSplits}
+            categories={categories}
+            onAddCategory={onAddCategory}
+            totalUsd={amountUsd ?? 0}
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Category</label>
+              <CategorySelect
+                value={form.category}
+                onChange={v => set('category', v)}
+                categories={categories}
+                onAdd={onAddCategory}
+                className="w-full py-2 px-3 text-sm rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Payment Method</label>
+              <select
+                value={form.payment_method}
+                onChange={e => set('payment_method', e.target.value)}
+                className="w-full bg-gray-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {paymentMethods.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
           </div>
+        )}
+        {splitEnabled && (
           <div>
             <label className="block text-xs text-gray-400 mb-1">Payment Method</label>
             <select
@@ -215,7 +318,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
               ))}
             </select>
           </div>
-        </div>
+        )}
 
         {/* Description */}
         <div>

@@ -94,6 +94,7 @@ function createSchema(db) {
   try { db.run('ALTER TABLE expenses ADD COLUMN type TEXT DEFAULT "Expense"') } catch {}
   try { db.run('ALTER TABLE transaction_types ADD COLUMN is_transfer INTEGER DEFAULT 0') } catch {}
   try { db.run('ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0') } catch {}
+  try { db.run('ALTER TABLE expenses ADD COLUMN splits TEXT') } catch {}
 
   // Recreate budgets table with year support if it's the old single-column schema
   const budgetMigrated = db.exec("SELECT COUNT(*) FROM migrations WHERE name='budgets_per_year_v1'")[0]?.values[0][0]
