@@ -94,19 +94,25 @@ export default function App() {
 
     if (!alerts.length) return
 
-    Notification.requestPermission().then(permission => {
-      if (permission !== 'granted') return
-      const newShown = [...shown]
-      for (const a of alerts) {
-        const title = a.over ? `Over budget: ${a.category}` : `Budget alert: ${a.category}`
-        const body = a.over
-          ? `Spent $${a.spent.toFixed(0)} — $${(a.spent - a.limit).toFixed(0)} over your $${a.limit.toFixed(0)}/mo limit.`
-          : `${(a.pct * 100).toFixed(0)}% used — $${a.spent.toFixed(0)} of $${a.limit.toFixed(0)} this month.`
-        new Notification(title, { body, icon: `${import.meta.env.BASE_URL}pwa-192x192.png` })
-        newShown.push(a.key)
+    try {
+      const fireNotifications = (permission) => {
+        if (permission !== 'granted') return
+        const newShown = [...shown]
+        for (const a of alerts) {
+          try {
+            const title = a.over ? `Over budget: ${a.category}` : `Budget alert: ${a.category}`
+            const body = a.over
+              ? `Spent $${a.spent.toFixed(0)} — $${(a.spent - a.limit).toFixed(0)} over your $${a.limit.toFixed(0)}/mo limit.`
+              : `${(a.pct * 100).toFixed(0)}% used — $${a.spent.toFixed(0)} of $${a.limit.toFixed(0)} this month.`
+            new Notification(title, { body, icon: `${import.meta.env.BASE_URL}pwa-192x192.png` })
+            newShown.push(a.key)
+          } catch {}
+        }
+        localStorage.setItem(shownKey, JSON.stringify(newShown))
       }
-      localStorage.setItem(shownKey, JSON.stringify(newShown))
-    })
+      const result = Notification.requestPermission(fireNotifications)
+      if (result && typeof result.then === 'function') result.then(fireNotifications)
+    } catch {}
   }, [db, expenses, budgets, transactionTypes])
 
   const categories = db ? query('SELECT name FROM categories ORDER BY name').map(r => r.name) : []
@@ -117,7 +123,7 @@ export default function App() {
   const transactionTypes = db ? query('SELECT name, is_income, is_transfer FROM transaction_types ORDER BY is_income, name') : []
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
   const budgets = db ? query('SELECT category, year, monthly_limit FROM budgets ORDER BY category') : []
-  const cashEntries = db ? query('SELECT * FROM cash_entries ORDER BY created_at ASC') : []
+  const cashEntries = db ? (() => { try { return query('SELECT * FROM cash_entries ORDER BY created_at ASC') } catch { return [] } })() : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
@@ -382,7 +388,7 @@ export default function App() {
         {saving && <p className="text-blue-400 text-sm mb-2">Saving to Drive...</p>}
 
         {db && (
-          <>
+          <ErrorBoundary>
             {formState === 'csv' ? (
               <CSVImport
                 categories={categories}
@@ -473,7 +479,7 @@ export default function App() {
                 onViewCash={() => setFormState('cash')}
               />
             )}
-          </>
+          </ErrorBoundary>
         )}
       </div>
     </div>
