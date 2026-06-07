@@ -40,5 +40,3 @@
 - [x] **Dashboard spending sparkline** — already exists as the Cash Flow 12-month chart on the dashboard
 
 - [x] **Swipe to delete/edit on mobile (2026-06-07)** — swipe left on any transaction row to reveal blue Edit and red Delete buttons; snaps open/closed; tap row to dismiss; desktop pencil/trash icons still present
-
-- [x] **Budget alert notifications on app open (2026-06-07)** — on each app open, checks all budgeted categories for the current month; fires a native Notification at 80% and again at 100%+ (over budget); each alert shown once per month per category via localStorage; requests permission on first alert

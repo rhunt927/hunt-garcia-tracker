@@ -43,77 +43,10 @@ export default function App() {
   const [dashboardYear, setDashboardYear] = useState(() => new Date().getFullYear())
   const [dashboardMonth, setDashboardMonth] = useState(() => new Date().getMonth())
   const listScrollY = useRef(0)
-  const budgetAlertsChecked = useRef(false)
 
   useEffect(() => {
     if (formState === 'list') window.scrollTo(0, listScrollY.current)
   }, [formState])
-
-  // Budget alert notifications — fires once per session when DB is ready
-  useEffect(() => {
-    if (!db || !expenses.length || !budgets.length || budgetAlertsChecked.current) return
-    if (!('Notification' in window)) return
-    budgetAlertsChecked.current = true
-
-    const now = new Date()
-    const year = now.getFullYear()
-    const mStr = String(now.getMonth() + 1).padStart(2, '0')
-    const incomeTypeNames = new Set(transactionTypes.filter(t => t.is_income && !t.is_transfer).map(t => t.name))
-    const transferTypeNames = new Set(transactionTypes.filter(t => t.is_transfer).map(t => t.name))
-
-    const monthExpenses = expenses.filter(e =>
-      e.date?.startsWith(`${year}-${mStr}`) &&
-      !incomeTypeNames.has(e.type) &&
-      !transferTypeNames.has(e.type)
-    )
-
-    function getSpent(category) {
-      return monthExpenses.reduce((s, e) => {
-        try {
-          const splits = e.splits ? JSON.parse(e.splits) : null
-          if (splits) return s + splits.filter(sp => sp.category === category).reduce((sum, sp) => sum + (sp.amount_usd ?? 0), 0)
-        } catch {}
-        return e.category === category ? s + (e.amount_usd ?? 0) : s
-      }, 0)
-    }
-
-    const shownKey = `budget_alerts_${year}_${mStr}`
-    const shown = JSON.parse(localStorage.getItem(shownKey) || '[]')
-
-    const alerts = budgets
-      .filter(b => b.year === year && b.monthly_limit > 0)
-      .flatMap(b => {
-        const spent = getSpent(b.category)
-        const pct = spent / b.monthly_limit
-        if (pct >= 1.0 && !shown.includes(`${b.category}_over`))
-          return [{ category: b.category, spent, limit: b.monthly_limit, pct, key: `${b.category}_over`, over: true }]
-        if (pct >= 0.8 && pct < 1.0 && !shown.includes(`${b.category}_80`))
-          return [{ category: b.category, spent, limit: b.monthly_limit, pct, key: `${b.category}_80`, over: false }]
-        return []
-      })
-
-    if (!alerts.length) return
-
-    try {
-      const fireNotifications = (permission) => {
-        if (permission !== 'granted') return
-        const newShown = [...shown]
-        for (const a of alerts) {
-          try {
-            const title = a.over ? `Over budget: ${a.category}` : `Budget alert: ${a.category}`
-            const body = a.over
-              ? `Spent $${a.spent.toFixed(0)} — $${(a.spent - a.limit).toFixed(0)} over your $${a.limit.toFixed(0)}/mo limit.`
-              : `${(a.pct * 100).toFixed(0)}% used — $${a.spent.toFixed(0)} of $${a.limit.toFixed(0)} this month.`
-            new Notification(title, { body, icon: `${import.meta.env.BASE_URL}pwa-192x192.png` })
-            newShown.push(a.key)
-          } catch {}
-        }
-        localStorage.setItem(shownKey, JSON.stringify(newShown))
-      }
-      const result = Notification.requestPermission(fireNotifications)
-      if (result && typeof result.then === 'function') result.then(fireNotifications)
-    } catch {}
-  }, [db, expenses, budgets, transactionTypes])
 
   const categories = db ? query('SELECT name FROM categories ORDER BY name').map(r => r.name) : []
   const paymentMethods = db ? query('SELECT name FROM payment_methods ORDER BY name').map(r => r.name) : []
