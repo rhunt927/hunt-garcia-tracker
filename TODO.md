@@ -2,6 +2,8 @@
 
 ## Done ✓
 
+- [x] **Split transactions (2026-06-07)** — "Split" toggle (scissors icon) in transaction form; unlimited rows (starts with 2, + Add another / X to remove); each row has category, USD amount, optional description; split amounts enforced ≤ transaction total; yellow split badges in transaction list; Budget and Reports decompose splits by category for accurate spending attribution; both split rows default to original transaction's category
+- [x] **Apple Card PDF import (2026-06-07)** — detects "Apple Card"/"Goldman Sachs" in PDF header; handles month-name date format (Jan 01); correctly picks last dollar column (actual charge) and ignores first column (Daily Cash cashback)
 - [x] Budget tracking — dedicated Budget view from dashboard; per-category, per-year limits; progress bars on dashboard filtered to viewed year
 - [x] Recurring flag — toggle in transaction form, purple ↺ icon in list
 - [x] Search — already existed in Transactions view
