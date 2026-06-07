@@ -104,6 +104,7 @@ const APPLE = {
   debitSection: /^(transactions|purchases)/i,
   skipSection: /^(total|account summary|interest charges|apr)/i,
   monthNameDates: true,
+  useLastAmount: true,  // first amount is Daily Cash (cashback), last is the actual charge
 }
 
 // ─── Core parser ─────────────────────────────────────────────────────────────
@@ -218,15 +219,24 @@ function parseTxnLine(line, year, bank, isCredit) {
     return null
   }
 
-  // Find first dollar amount (may be preceded by $ sign)
-  const amountMatch = rest.match(/\$?\s*(-?[\d,]+\.\d{2})/)
-  if (!amountMatch) return null
+  // Find dollar amounts — Apple Card has Daily Cash first, then actual Amount last
+  const allAmounts = [...rest.matchAll(/\$?\s*(-?[\d,]+\.\d{2})/g)]
+  if (allAmounts.length === 0) return null
 
-  const rawAmount = parseFloat(amountMatch[1].replace(/,/g, ''))
+  const chosenMatch = bank.useLastAmount && allAmounts.length > 1
+    ? allAmounts[allAmounts.length - 1]
+    : allAmounts[0]
+  const firstMatch = allAmounts[0]
+
+  const rawAmount = parseFloat(chosenMatch[1].replace(/,/g, ''))
   const amount = Math.abs(rawAmount)
   if (!amount || amount <= 0) return null
 
-  const description = rest.slice(0, amountMatch.index).trim().replace(/\s*\$$/, '').trim()
+  // Description is everything before the first dollar amount, minus trailing % cashback indicators
+  const description = rest.slice(0, firstMatch.index).trim()
+    .replace(/\s+\d+%\s*$/, '')   // strip trailing "3%" cashback percentage
+    .replace(/\s*\$$/, '')
+    .trim()
   if (!description || description.length < 2) return null
 
   // Skip obvious summary/balance lines
