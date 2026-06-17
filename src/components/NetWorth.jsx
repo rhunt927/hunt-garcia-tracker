@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, Pencil, Trash2, Check, X, Plus, Upload } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const ASSET_TYPES = ['Investment', 'Checking', 'Savings', 'Real Estate', 'Other']
 const LIABILITY_TYPES = ['Credit Card', 'Loan', 'Mortgage']
@@ -38,6 +39,15 @@ const SUB_SECTION_MAP = {
 
 export function parseNWCSV(text) {
   const lines = text.replace(/^﻿/, '').replace(/^ï»¿/, '').split('\n').map(l => l.trim()).filter(Boolean)
+
+  // Extract "as of date" from header e.g. "Net Worth Summary as of date 06/17/2026"
+  let asOfDate = new Date().toISOString().split('T')[0]
+  const dateMatch = lines[0]?.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (dateMatch) {
+    const [, mm, dd, yyyy] = dateMatch
+    asOfDate = `${yyyy}-${mm}-${dd}`
+  }
+
   let is_liability = 0
   let account_type = 'Other'
   const accounts = []
@@ -81,12 +91,12 @@ export function parseNWCSV(text) {
     accounts.push({ id: crypto.randomUUID(), name, institution, account_type: resolvedType, is_liability, balance, last_updated, sort_order: accounts.length })
   }
 
-  return accounts
+  return { accounts, asOfDate }
 }
 
 const BLANK = { name: '', institution: '', account_type: 'Checking', balance: '' }
 
-export function NetWorth({ accounts, onAdd, onUpdate, onDelete, onImportCSV, onBack }) {
+export function NetWorth({ accounts, snapshots, onAdd, onUpdate, onDelete, onImportCSV, onBack }) {
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(BLANK)
   const [showAdd, setShowAdd] = useState(false)
@@ -106,9 +116,9 @@ export function NetWorth({ accounts, onAdd, onUpdate, onDelete, onImportCSV, onB
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const parsed = parseNWCSV(ev.target.result)
-        onImportCSV(parsed)
-        setImportMsg({ ok: true, text: `Imported ${parsed.length} accounts` })
+        const { accounts, asOfDate } = parseNWCSV(ev.target.result)
+        onImportCSV(accounts, asOfDate)
+        setImportMsg({ ok: true, text: `Imported ${accounts.length} accounts (as of ${asOfDate})` })
         setTimeout(() => setImportMsg(null), 4000)
       } catch (err) {
         setImportMsg({ ok: false, text: err.message })
@@ -160,6 +170,8 @@ export function NetWorth({ accounts, onAdd, onUpdate, onDelete, onImportCSV, onB
         </div>
       </div>
 
+      {snapshots.length > 0 && <HistoryChart snapshots={snapshots} />}
+
       {importMsg && (
         <div className={`text-sm px-4 py-2.5 rounded-xl border ${importMsg.ok ? 'bg-green-900/40 text-green-300 border-green-500/20' : 'bg-red-900/40 text-red-300 border-red-500/20'}`}>
           {importMsg.text}
@@ -196,6 +208,67 @@ export function NetWorth({ accounts, onAdd, onUpdate, onDelete, onImportCSV, onB
         </button>
         <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
       </div>
+    </div>
+  )
+}
+
+function HistoryChart({ snapshots }) {
+  const chartRef = useRef(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    if (!chartRef.current) return
+    const ro = new ResizeObserver(entries => {
+      if (entries[0]?.contentRect.width > 0) setReady(true)
+    })
+    ro.observe(chartRef.current)
+    return () => ro.disconnect()
+  }, [])
+
+  const data = snapshots.map(s => {
+    const [yyyy, mm, dd] = s.date.split('-')
+    const label = new Date(+yyyy, +mm - 1, +dd).toLocaleString('default', { month: 'short', year: '2-digit' })
+    return {
+      date: label,
+      'Net Worth': Math.round(s.net_worth),
+      Assets: Math.round(s.total_assets),
+      Liabilities: Math.round(s.total_liabilities),
+    }
+  })
+
+  const fmtY = v => {
+    const abs = Math.abs(v)
+    if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+    if (abs >= 1_000) return `$${(v / 1_000).toFixed(0)}K`
+    return `$${v}`
+  }
+
+  return (
+    <div className="bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+      <p className="text-sm font-medium text-gray-300 mb-3">History</p>
+      <div ref={chartRef}>
+        {!ready ? null : (
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={fmtY} width={56} />
+              <Tooltip
+                contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                labelStyle={{ color: '#f3f4f6', fontSize: 12 }}
+                formatter={(value, name) => [`$${Math.round(value).toLocaleString()}`, name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af' }} />
+              <Line dataKey="Assets" type="monotone" stroke="#22c55e" strokeWidth={2} dot={snapshots.length < 10} />
+              <Line dataKey="Liabilities" type="monotone" stroke="#f87171" strokeWidth={2} dot={snapshots.length < 10} />
+              <Line dataKey="Net Worth" type="monotone" stroke="#a78bfa" strokeWidth={2.5} dot={snapshots.length < 10} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+      {snapshots.length === 1 && (
+        <p className="text-xs text-gray-600 mt-2 text-center">Import again next month to see the trend</p>
+      )}
     </div>
   )
 }

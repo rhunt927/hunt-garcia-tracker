@@ -59,6 +59,7 @@ export default function App() {
   const budgets = db ? query('SELECT category, year, monthly_limit FROM budgets ORDER BY category') : []
   const cashEntries = db ? (() => { try { return query('SELECT * FROM cash_entries ORDER BY created_at ASC') } catch { return [] } })() : []
   const nwAccounts = db ? (() => { try { return query('SELECT * FROM net_worth_accounts ORDER BY sort_order, id') } catch { return [] } })() : []
+  const nwSnapshots = db ? (() => { try { return query('SELECT * FROM net_worth_snapshots ORDER BY date ASC') } catch { return [] } })() : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
@@ -181,8 +182,8 @@ export default function App() {
     await save()
   }, [run, save])
 
-  const handleImportNWCSV = useCallback(async (parsed) => {
-    for (const acct of parsed) {
+  const handleImportNWCSV = useCallback(async (accounts, asOfDate) => {
+    for (const acct of accounts) {
       const existing = query('SELECT id FROM net_worth_accounts WHERE institution=? AND name=?', [acct.institution, acct.name])
       if (existing.length) {
         run('UPDATE net_worth_accounts SET balance=?,account_type=?,is_liability=?,last_updated=? WHERE id=?',
@@ -192,6 +193,11 @@ export default function App() {
           [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
       }
     }
+    const totalAssets = accounts.filter(a => !a.is_liability).reduce((s, a) => s + a.balance, 0)
+    const totalLiabilities = accounts.filter(a => a.is_liability).reduce((s, a) => s + a.balance, 0)
+    run('DELETE FROM net_worth_snapshots WHERE date=?', [asOfDate])
+    run('INSERT INTO net_worth_snapshots VALUES (?,?,?,?,?)',
+      [crypto.randomUUID(), asOfDate, totalAssets, totalLiabilities, totalAssets - totalLiabilities])
     await save()
   }, [run, query, save])
 
@@ -391,6 +397,7 @@ export default function App() {
             ) : formState === 'networth' ? (
               <NetWorth
                 accounts={nwAccounts}
+                snapshots={nwSnapshots}
                 onAdd={handleAddNWAccount}
                 onUpdate={handleUpdateNWAccount}
                 onDelete={handleDeleteNWAccount}
