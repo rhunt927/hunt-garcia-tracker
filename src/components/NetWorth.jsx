@@ -339,8 +339,11 @@ function AccountSection({ title, groups, typeOrder, editId, form, setForm, onSta
       <div className="space-y-2">
         {orderedTypes.map(type => (
           <div key={type} className="bg-gray-900/80 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden">
-            <div className="px-4 py-2 bg-white/5 border-b border-white/5">
+            <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
               <p className="text-xs font-medium text-gray-400">{type}</p>
+              <p className="text-xs font-semibold tabular-nums text-gray-400">
+                ${fmt(groups[type].reduce((s, a) => s + a.balance, 0))}
+              </p>
             </div>
             {groups[type].map((acct, i) =>
               editId === acct.id ? (
