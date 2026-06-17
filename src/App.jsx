@@ -602,7 +602,7 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, netWorthTot
             <TrendingUp size={15} />
             <span className="text-xs font-medium">Income</span>
           </div>
-          <p className="text-xl font-bold text-white">${totalIncome.toFixed(0)}</p>
+          <p className="text-xl font-bold text-white">${totalIncome.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
         </button>
 
         <button
@@ -613,7 +613,7 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, netWorthTot
             <TrendingDown size={15} />
             <span className="text-xs font-medium">Expenses</span>
           </div>
-          <p className="text-xl font-bold text-white">${totalExpenses.toFixed(0)}</p>
+          <p className="text-xl font-bold text-white">${totalExpenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
         </button>
 
         <button
@@ -624,7 +624,7 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, netWorthTot
             <Wallet size={15} />
             <span className="text-xs font-medium">Cash</span>
           </div>
-          <p className="text-xl font-bold text-white">${cashTotal.toFixed(0)}</p>
+          <p className="text-xl font-bold text-white">${cashTotal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
         </button>
       </div>
 
