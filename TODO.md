@@ -38,7 +38,7 @@
 ## Net Worth
 
 - [x] **Manual net worth tracker — accounts (assets & liabilities) (2026-06-17)**
-  Net Worth screen with accounts grouped by type (Investment, Checking, Savings, Real Estate, Other / Credit Card, Loan, Mortgage). Inline add/edit/delete. Import from BOA Net Worth CSV (upserts on institution+name match). Dashboard: purple tile shows total, Net Worth button in action grid.
+  Net Worth screen with accounts grouped by type (Investment, Checking, Savings, Real Estate, Other / Credit Card, Loan, Mortgage) with subtotals per group. Inline add/edit/delete. Import from BOA Net Worth CSV (upserts on institution+name match, reads "as of date" from header). Each import saves a snapshot — history line chart (Assets / Liabilities / Net Worth) appears in the screen. Dashboard: purple tile shows total, Net Worth button in action grid. Cash tile and Cash screen now pull live Checking/Savings balances from Net Worth accounts; manual cash entries remain editable alongside.
 
 ---
 
