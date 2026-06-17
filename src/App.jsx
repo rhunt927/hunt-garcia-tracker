@@ -60,6 +60,7 @@ export default function App() {
   const cashEntries = db ? (() => { try { return query('SELECT * FROM cash_entries ORDER BY created_at ASC') } catch { return [] } })() : []
   const nwAccounts = db ? (() => { try { return query('SELECT * FROM net_worth_accounts ORDER BY sort_order, id') } catch { return [] } })() : []
   const nwSnapshots = db ? (() => { try { return query('SELECT * FROM net_worth_snapshots ORDER BY date ASC') } catch { return [] } })() : []
+  const nwBankAccounts = nwAccounts.filter(a => !a.is_liability && (a.account_type === 'Checking' || a.account_type === 'Savings'))
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
@@ -389,10 +390,12 @@ export default function App() {
             ) : formState === 'cash' ? (
               <Cash
                 entries={cashEntries}
+                bankAccounts={nwBankAccounts}
                 onAdd={handleAddCashEntry}
                 onUpdate={handleUpdateCashEntry}
                 onDelete={handleDeleteCashEntry}
                 onBack={() => setFormState(null)}
+                onViewNetWorth={() => setFormState('networth')}
               />
             ) : formState === 'networth' ? (
               <NetWorth
@@ -450,7 +453,7 @@ export default function App() {
                 expenses={expenses}
                 transactionTypes={transactionTypes}
                 budgets={budgets}
-                cashTotal={cashEntries.reduce((s, e) => s + (e.amount ?? 0), 0)}
+                cashTotal={cashEntries.reduce((s, e) => s + (e.amount ?? 0), 0) + nwBankAccounts.reduce((s, a) => s + a.balance, 0)}
                 netWorthTotal={nwAccounts.reduce((s, a) => s + (a.is_liability ? -a.balance : a.balance), 0)}
                 hasNWAccounts={nwAccounts.length > 0}
                 selectedYear={dashboardYear}
