@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef, useMemo, Component } from 'react'
-import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight, Wallet } from 'lucide-react'
+import { Menu, TrendingUp, TrendingDown, Plus, FileUp, List, BarChart2, ChevronLeft, ChevronRight, Wallet, Landmark } from 'lucide-react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { Reports } from './components/Reports'
 import { Budget } from './components/Budget'
 import { Cash } from './components/Cash'
+import { NetWorth } from './components/NetWorth'
 import { useAuth } from './hooks/useAuth'
 import { useDatabase } from './hooks/useDatabase'
 import { LoginScreen } from './components/LoginScreen'
@@ -57,6 +58,7 @@ export default function App() {
   const expenses = db ? query('SELECT * FROM expenses ORDER BY date DESC, created_at DESC') : []
   const budgets = db ? query('SELECT category, year, monthly_limit FROM budgets ORDER BY category') : []
   const cashEntries = db ? (() => { try { return query('SELECT * FROM cash_entries ORDER BY created_at ASC') } catch { return [] } })() : []
+  const nwAccounts = db ? (() => { try { return query('SELECT * FROM net_worth_accounts ORDER BY sort_order, id') } catch { return [] } })() : []
 
   const handleSave = useCallback(async (expense) => {
     setSaving(true)
@@ -159,6 +161,39 @@ export default function App() {
     run('DELETE FROM cash_entries WHERE id=?', [id])
     await save()
   }, [run, save])
+
+  // Net worth account callbacks
+  const handleAddNWAccount = useCallback(async (acct) => {
+    run('INSERT INTO net_worth_accounts VALUES (?,?,?,?,?,?,?,?)',
+      [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
+    await save()
+  }, [run, save])
+
+  const handleUpdateNWAccount = useCallback(async (id, fields) => {
+    const now = new Date().toISOString().split('T')[0]
+    run('UPDATE net_worth_accounts SET name=?,institution=?,account_type=?,is_liability=?,balance=?,last_updated=? WHERE id=?',
+      [fields.name, fields.institution, fields.account_type, fields.is_liability, fields.balance, fields.last_updated ?? now, id])
+    await save()
+  }, [run, save])
+
+  const handleDeleteNWAccount = useCallback(async (id) => {
+    run('DELETE FROM net_worth_accounts WHERE id=?', [id])
+    await save()
+  }, [run, save])
+
+  const handleImportNWCSV = useCallback(async (parsed) => {
+    for (const acct of parsed) {
+      const existing = query('SELECT id FROM net_worth_accounts WHERE institution=? AND name=?', [acct.institution, acct.name])
+      if (existing.length) {
+        run('UPDATE net_worth_accounts SET balance=?,account_type=?,is_liability=?,last_updated=? WHERE id=?',
+          [acct.balance, acct.account_type, acct.is_liability, acct.last_updated, existing[0].id])
+      } else {
+        run('INSERT INTO net_worth_accounts VALUES (?,?,?,?,?,?,?,?)',
+          [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
+      }
+    }
+    await save()
+  }, [run, query, save])
 
   // Payment method callbacks
   const handleAddPaymentMethod = useCallback(async (name) => {
@@ -353,6 +388,15 @@ export default function App() {
                 onDelete={handleDeleteCashEntry}
                 onBack={() => setFormState(null)}
               />
+            ) : formState === 'networth' ? (
+              <NetWorth
+                accounts={nwAccounts}
+                onAdd={handleAddNWAccount}
+                onUpdate={handleUpdateNWAccount}
+                onDelete={handleDeleteNWAccount}
+                onImportCSV={handleImportNWCSV}
+                onBack={() => setFormState(null)}
+              />
             ) : formState === 'budget' ? (
               <Budget
                 categories={categories}
@@ -400,6 +444,8 @@ export default function App() {
                 transactionTypes={transactionTypes}
                 budgets={budgets}
                 cashTotal={cashEntries.reduce((s, e) => s + (e.amount ?? 0), 0)}
+                netWorthTotal={nwAccounts.reduce((s, a) => s + (a.is_liability ? -a.balance : a.balance), 0)}
+                hasNWAccounts={nwAccounts.length > 0}
                 selectedYear={dashboardYear}
                 selectedMonth={dashboardMonth}
                 setSelectedYear={setDashboardYear}
@@ -410,6 +456,7 @@ export default function App() {
                 onViewReports={(filters) => { setReportFilters(filters || {}); setFormState('reports') }}
                 onViewBudget={() => { setFormState('budget') }}
                 onViewCash={() => setFormState('cash')}
+                onViewNetWorth={() => setFormState('networth')}
               />
             )}
           </ErrorBoundary>
@@ -480,7 +527,7 @@ function CashFlowChart({ expenses, incomeTypeNames, transferTypeNames }) {
   )
 }
 
-function Dashboard({ expenses, transactionTypes, budgets, cashTotal, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget, onViewCash }) {
+function Dashboard({ expenses, transactionTypes, budgets, cashTotal, netWorthTotal, hasNWAccounts, selectedYear, selectedMonth, setSelectedYear, setSelectedMonth, onViewList, onAdd, onImportCSV, onViewReports, onViewBudget, onViewCash, onViewNetWorth }) {
   const incomeTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_income && !t.is_transfer).map(t => t.name))
   const transferTypeNames = new Set((transactionTypes ?? []).filter(t => t.is_transfer).map(t => t.name))
 
@@ -574,6 +621,24 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, selectedYea
         </button>
       </div>
 
+      {/* Net Worth tile */}
+      <button
+        onClick={onViewNetWorth}
+        className="w-full bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-2xl p-4 text-left transition-colors"
+      >
+        <div className="flex items-center gap-1.5 text-purple-400 mb-2">
+          <Landmark size={15} />
+          <span className="text-xs font-medium">Net Worth</span>
+        </div>
+        {hasNWAccounts ? (
+          <p className="text-xl font-bold text-white">
+            {netWorthTotal >= 0 ? '' : '−'}${Math.abs(netWorthTotal).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </p>
+        ) : (
+          <p className="text-sm text-purple-300/60">Tap to set up accounts →</p>
+        )}
+      </button>
+
       {/* Cash flow chart */}
       <CashFlowChart expenses={expenses} incomeTypeNames={incomeTypeNames} transferTypeNames={transferTypeNames} />
 
@@ -602,7 +667,7 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, selectedYea
             <span className="text-xs font-medium">Reports</span>
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             onClick={onViewBudget}
             className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
@@ -616,6 +681,13 @@ function Dashboard({ expenses, transactionTypes, budgets, cashTotal, selectedYea
           >
             <FileUp size={20} />
             <span className="text-xs font-medium">Import</span>
+          </button>
+          <button
+            onClick={onViewNetWorth}
+            className="flex flex-col items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-white/10 rounded-xl py-4 transition-colors"
+          >
+            <Landmark size={20} />
+            <span className="text-xs font-medium">Net Worth</span>
           </button>
         </div>
       </div>

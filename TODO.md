@@ -35,6 +35,13 @@
 
 ---
 
+## Net Worth
+
+- [x] **Manual net worth tracker — accounts (assets & liabilities) (2026-06-17)**
+  Net Worth screen with accounts grouped by type (Investment, Checking, Savings, Real Estate, Other / Credit Card, Loan, Mortgage). Inline add/edit/delete. Import from BOA Net Worth CSV (upserts on institution+name match). Dashboard: purple tile shows total, Net Worth button in action grid.
+
+---
+
 ## Nice to Have
 
 - [x] **Dashboard spending sparkline** — already exists as the Cash Flow 12-month chart on the dashboard

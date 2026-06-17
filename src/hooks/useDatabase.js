@@ -106,6 +106,19 @@ function createSchema(db) {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS net_worth_accounts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      institution TEXT,
+      account_type TEXT NOT NULL,
+      is_liability INTEGER NOT NULL DEFAULT 0,
+      balance REAL NOT NULL DEFAULT 0,
+      last_updated TEXT,
+      sort_order INTEGER DEFAULT 0
+    )
+  `)
+
   // Recreate budgets table with year support if it's the old single-column schema
   const budgetMigrated = db.exec("SELECT COUNT(*) FROM migrations WHERE name='budgets_per_year_v1'")[0]?.values[0][0]
   if (!budgetMigrated) {
