@@ -278,7 +278,7 @@ export function CSVImport({
               )}
             </div>
             <p className="text-xs text-gray-600 mt-4">CSV: Apple Card, Chase, Discover, BofA, Schwab</p>
-            <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover</p>
+            <p className="text-xs text-gray-600">PDF: Schwab, BofA, Chase, Discover, Wells Fargo</p>
             <p className="text-xs text-gray-600">TXT: BofA statement export</p>
           </div>
         </>

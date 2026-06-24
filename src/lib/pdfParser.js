@@ -37,7 +37,7 @@ export async function parsePDF(file) {
   }
 
   const bank = detectBank(allLines)
-  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover.')
+  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo.')
 
   return parseStatementLines(allLines, bank)
 }
@@ -49,12 +49,14 @@ function detectBank(lines) {
   if (/bank of america/i.test(header)) return BOA
   if (/jpmorgan chase|chase bank|chase card|chase\.com/i.test(header)) return CHASE
   if (/discover bank|discover card|discover\.com/i.test(header)) return DISCOVER
+  if (/wells fargo/i.test(header)) return WELLS_FARGO
   const full = lines.join(' ')
   if (/apple card/i.test(full)) return APPLE
   if (/schwab/i.test(full)) return SCHWAB
   if (/bank of america/i.test(full)) return BOA
   if (/\bchase\b/i.test(full)) return CHASE
   if (/\bdiscover\b/i.test(full)) return DISCOVER
+  if (/wells fargo/i.test(full)) return WELLS_FARGO
   return null
 }
 
@@ -107,6 +109,19 @@ const APPLE = {
   useLastAmount: true,  // first amount is Daily Cash (cashback), last is the actual charge
 }
 
+// Wells Fargo credit card (Autograph, Active Cash, etc.)
+// Transaction rows: CARDLAST4  MM/DD  MM/DD  REFNUM  DESCRIPTION  AMOUNT
+// Credits column populated for payments; Charges column for purchases.
+const WELLS_FARGO = {
+  name: 'Wells Fargo',
+  paymentMethod: 'Wells Fargo Credit Card',
+  source: 'pdf_wf',
+  creditSection: /^payments and (?:other )?credits?/i,
+  debitSection: /^(purchases,?\s*balance transfers|fees charged)/i,
+  skipSection: /^(interest charged|total |20\d{2} totals|interest charge calc|wells fargo news|this page intentionally)/i,
+  parseLine: parseWFLine,
+}
+
 // ─── Core parser ─────────────────────────────────────────────────────────────
 
 function parseStatementLines(lines, bank) {
@@ -143,6 +158,32 @@ function parseStatementLines(lines, bank) {
   return { rows, bankName: `${bank.name} (PDF)` }
 }
 
+// WF CC line format: CARDLAST4  MM/DD  MM/DD  REFNUM  DESCRIPTION  AMOUNT
+// e.g. "7119 06/19 06/19 2404955HWS66E8J71 PRO NAILS & SPA LIBERTYVILLE IL 71.75"
+function parseWFLine(line, year, isCredit) {
+  const m = line.match(/^\d{4}\s+(\d{2}\/\d{2})\s+\d{2}\/\d{2}\s+\S+\s+(.*?)\s+([\d,]+\.\d{2})\s*$/)
+  if (!m) return null
+  const [, transDate, description, amtStr] = m
+  const desc = description.trim()
+  if (!desc || desc.length < 2) return null
+  if (/^(total|interest|minimum payment|new balance)/i.test(desc)) return null
+  const amount = parseFloat(amtStr.replace(/,/g, ''))
+  if (!amount || amount <= 0) return null
+  const [mm, dd] = transDate.split('/')
+  return {
+    date: `${year}-${mm}-${dd}`,
+    merchant: desc,
+    description: null,
+    amount,
+    currency: 'USD',
+    amount_usd: amount,
+    category: null,
+    payment_method: 'Wells Fargo Credit Card',
+    source: 'pdf_wf',
+    isCredit: !!isCredit,
+  }
+}
+
 function parseSectionAware(lines, bank, year) {
   const rows = []
   let sectionType = null
@@ -154,9 +195,12 @@ function parseSectionAware(lines, bank, year) {
     if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
-    const parsed = parseTxnLine(line, year, bank, sectionType === 'credit')
+    const isCredit = sectionType === 'credit'
+    const parsed = bank.parseLine
+      ? bank.parseLine(line, year, isCredit)
+      : parseTxnLine(line, year, bank, isCredit)
     if (parsed) {
-      parsed.description = followOnLine(lines, i, bank)
+      if (!bank.parseLine) parsed.description = followOnLine(lines, i, bank)
       rows.push(parsed)
     }
   }
