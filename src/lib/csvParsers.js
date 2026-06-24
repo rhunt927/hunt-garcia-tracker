@@ -94,16 +94,13 @@ export function parseCSV(file) {
 }
 
 function detectParser(headers) {
-  const h = headers.map(s => s.toLowerCase().trim())
+  const h = headers.map(s => s.toLowerCase())
   if (h.includes('transaction date') && h.includes('merchant') && h.includes('purchased by')) return APPLE_CARD
   if (h.includes('transaction date') && h.includes('post date') && h.includes('memo')) return CHASE
   if (h.includes('trans. date') && h.includes('post date')) return DISCOVER
   if (h.includes('posted date') && h.includes('payee') && h.includes('reference number')) return BOA
-  if (h.includes('transaction date') && h.includes('posted date') && h.includes('reference number')) return WELLS_FARGO_CC
   if (h.includes('checknumber') && h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB_INVESTOR
   if (h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB
-  // Wells Fargo checking: 5-col format with asterisk placeholder columns
-  if (h.includes('date') && h.includes('amount') && h.includes('description') && headers.some(c => /^\*+\s*$/.test(c))) return WELLS_FARGO
   return GENERIC
 }
 
@@ -241,67 +238,6 @@ const SCHWAB_INVESTOR = {
       source: 'csv_schwab_investor',
     }
   },
-}
-
-// Wells Fargo checking/savings: Date, Amount, *, **, Description (no header row sometimes)
-// Amount is negative for debits, positive for credits
-const WELLS_FARGO = {
-  name: 'Wells Fargo',
-  parse: (row) => {
-    const amount = parseFloat(row['Amount'])
-    if (isNaN(amount) || amount === 0) return null
-    const isCredit = amount > 0
-    return {
-      date: mmddyyyy(row['Date']),
-      merchant: cleanWFDesc(row['Description']?.trim()),
-      description: row['Description']?.trim() || null,
-      amount: Math.abs(amount),
-      currency: 'USD',
-      amount_usd: Math.abs(amount),
-      isCredit,
-      category: null,
-      payment_method: 'Wells Fargo Checking',
-      source: 'csv_wf',
-    }
-  },
-}
-
-// Wells Fargo credit card: Transaction Date, Posted Date, Reference Number, Description, Credits, Charges
-const WELLS_FARGO_CC = {
-  name: 'Wells Fargo Credit Card',
-  parse: (row) => {
-    const charges = parseFloat((row['Charges'] ?? '').replace(/[$,]/g, ''))
-    const credits = parseFloat((row['Credits'] ?? '').replace(/[$,]/g, ''))
-    const isCredit = !isNaN(credits) && credits > 0 && (isNaN(charges) || charges === 0)
-    const amount = isCredit ? credits : charges
-    if (isNaN(amount) || amount <= 0) return null
-    return {
-      date: mmddyyyy(row['Transaction Date']),
-      merchant: cleanWFDesc(row['Description']?.trim()),
-      description: row['Description']?.trim() || null,
-      amount,
-      currency: 'USD',
-      amount_usd: amount,
-      isCredit,
-      category: null,
-      payment_method: 'Wells Fargo Credit Card',
-      source: 'csv_wf_cc',
-    }
-  },
-}
-
-function cleanWFDesc(raw) {
-  if (!raw) return raw
-  // Strip trailing reference numbers like "1234567890 #123456"
-  let d = raw.replace(/\s+\d{6,}\s*#?\d*$/, '').trim()
-  // Normalize common WF prefixes
-  d = d.replace(/^POS PURCHASE\s*/i, '')
-  d = d.replace(/^DEBIT PURCHASE-VISA\s*/i, '')
-  d = d.replace(/^RECURRING PAYMENT\s*/i, '')
-  d = d.replace(/^ONLINE PAYMENT\s*/i, 'Online Payment ')
-  // Clean up city/state suffixes: "MERCHANT NAME  SAN FRANCISCO CA"
-  d = d.replace(/\s{2,}[A-Z\s]+\s+[A-Z]{2}\s*$/, '').trim()
-  return d || raw.trim()
 }
 
 const GENERIC = {
