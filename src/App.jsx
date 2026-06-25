@@ -165,23 +165,39 @@ export default function App() {
   }, [run, save])
 
   // Net worth account callbacks
+  const saveNWSnapshot = useCallback(() => {
+    const accounts = query('SELECT is_liability, balance FROM net_worth_accounts')
+    const totalAssets = accounts.filter(a => !a.is_liability).reduce((s, a) => s + a.balance, 0)
+    const totalLiabilities = accounts.filter(a => a.is_liability).reduce((s, a) => s + a.balance, 0)
+    const netWorth = totalAssets - totalLiabilities
+    const lastSnap = query('SELECT net_worth FROM net_worth_snapshots ORDER BY date DESC LIMIT 1')
+    if (lastSnap.length && Math.round(lastSnap[0].net_worth * 100) === Math.round(netWorth * 100)) return
+    const today = new Date().toISOString().split('T')[0]
+    run('DELETE FROM net_worth_snapshots WHERE date=?', [today])
+    run('INSERT INTO net_worth_snapshots VALUES (?,?,?,?,?)',
+      [crypto.randomUUID(), today, totalAssets, totalLiabilities, netWorth])
+  }, [query, run])
+
   const handleAddNWAccount = useCallback(async (acct) => {
     run('INSERT INTO net_worth_accounts VALUES (?,?,?,?,?,?,?,?)',
       [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
+    saveNWSnapshot()
     await save()
-  }, [run, save])
+  }, [run, save, saveNWSnapshot])
 
   const handleUpdateNWAccount = useCallback(async (id, fields) => {
     const now = new Date().toISOString().split('T')[0]
     run('UPDATE net_worth_accounts SET name=?,institution=?,account_type=?,is_liability=?,balance=?,last_updated=? WHERE id=?',
       [fields.name, fields.institution, fields.account_type, fields.is_liability, fields.balance, fields.last_updated ?? now, id])
+    saveNWSnapshot()
     await save()
-  }, [run, save])
+  }, [run, save, saveNWSnapshot])
 
   const handleDeleteNWAccount = useCallback(async (id) => {
     run('DELETE FROM net_worth_accounts WHERE id=?', [id])
+    saveNWSnapshot()
     await save()
-  }, [run, save])
+  }, [run, save, saveNWSnapshot])
 
   const handleImportNWCSV = useCallback(async (accounts, asOfDate) => {
     for (const acct of accounts) {
