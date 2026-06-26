@@ -232,9 +232,15 @@ function HistoryChart({ snapshots }) {
     return () => ro.disconnect()
   }, [])
 
+  const spanDays = snapshots.length > 1
+    ? (new Date(snapshots.at(-1).date) - new Date(snapshots[0].date)) / 86400000
+    : 0
   const data = snapshots.map(s => {
     const [yyyy, mm, dd] = s.date.split('-')
-    const label = new Date(+yyyy, +mm - 1, +dd).toLocaleString('default', { month: 'short', year: '2-digit' })
+    const d = new Date(+yyyy, +mm - 1, +dd)
+    const label = spanDays > 90
+      ? d.toLocaleString('default', { month: 'short', year: '2-digit' })
+      : d.toLocaleString('default', { month: 'short', day: 'numeric' })
     return {
       date: label,
       'Net Worth': Math.round(s.net_worth),
