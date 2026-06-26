@@ -53,18 +53,21 @@ export function parseNWCSV(text) {
   const accounts = []
 
   for (const line of lines) {
-    if (/^ASSETS/i.test(line)) { is_liability = 0; continue }
-    if (/^LIABILITIES/i.test(line)) { is_liability = 1; continue }
-    if (/^(NETWORTH|Total assets|Total liabilities)/i.test(line)) continue
+    const fields = parseCSVLine(line)
+    const f0 = fields[0]?.trim() ?? ''
+    const f0up = f0.toUpperCase()
 
-    const sub = Object.keys(SUB_SECTION_MAP).find(k => line === k)
+    if (f0up === 'ASSETS') { is_liability = 0; continue }
+    if (f0up === 'LIABILITIES') { is_liability = 1; continue }
+    if (f0up === 'NETWORTH' || f0up === 'TOTAL ASSETS' || f0up === 'TOTAL LIABILITIES') continue
+
+    const sub = Object.keys(SUB_SECTION_MAP).find(k => f0 === k)
     if (sub) { account_type = SUB_SECTION_MAP[sub]; continue }
 
-    const fields = parseCSVLine(line)
     if (fields.length < 4) continue
 
     const [rawName, lastUpdated, , rawBalance] = fields
-    if (!rawName || rawName.includes('TOTAL') || rawName === 'All Accounts') continue
+    if (!rawName || rawName.toUpperCase().includes('TOTAL') || rawName === 'All Accounts') continue
 
     const balance = parseFloat(rawBalance.replace(/[$,]/g, ''))
     if (isNaN(balance)) continue
