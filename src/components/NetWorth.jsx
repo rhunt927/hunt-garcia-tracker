@@ -116,10 +116,14 @@ export function NetWorth({ accounts, snapshots, onAdd, onUpdate, onDelete, onImp
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const { accounts, asOfDate } = parseNWCSV(ev.target.result)
-        onImportCSV(accounts, asOfDate)
-        setImportMsg({ ok: true, text: `Imported ${accounts.length} accounts (as of ${asOfDate})` })
-        setTimeout(() => setImportMsg(null), 4000)
+        const { accounts: parsed, asOfDate } = parseNWCSV(ev.target.result)
+        const msg = accounts.length > 0
+          ? `Replace all ${accounts.length} existing accounts with ${parsed.length} accounts from CSV?`
+          : `Import ${parsed.length} accounts from CSV?`
+        if (!window.confirm(msg)) return
+        onImportCSV(parsed, asOfDate, true)
+        setImportMsg({ ok: true, text: `Replaced with ${parsed.length} accounts (as of ${asOfDate})` })
+        setTimeout(() => setImportMsg(null), 5000)
       } catch (err) {
         setImportMsg({ ok: false, text: err.message })
       }

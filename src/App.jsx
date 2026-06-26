@@ -199,15 +199,23 @@ export default function App() {
     await save()
   }, [run, save, saveNWSnapshot])
 
-  const handleImportNWCSV = useCallback(async (accounts, asOfDate) => {
-    for (const acct of accounts) {
-      const existing = query('SELECT id FROM net_worth_accounts WHERE institution=? AND name=?', [acct.institution, acct.name])
-      if (existing.length) {
-        run('UPDATE net_worth_accounts SET balance=?,account_type=?,is_liability=?,last_updated=? WHERE id=?',
-          [acct.balance, acct.account_type, acct.is_liability, acct.last_updated, existing[0].id])
-      } else {
+  const handleImportNWCSV = useCallback(async (accounts, asOfDate, replaceAll = false) => {
+    if (replaceAll) {
+      run('DELETE FROM net_worth_accounts', [])
+      for (const acct of accounts) {
         run('INSERT INTO net_worth_accounts VALUES (?,?,?,?,?,?,?,?)',
           [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
+      }
+    } else {
+      for (const acct of accounts) {
+        const existing = query('SELECT id FROM net_worth_accounts WHERE institution=? AND name=?', [acct.institution, acct.name])
+        if (existing.length) {
+          run('UPDATE net_worth_accounts SET balance=?,account_type=?,is_liability=?,last_updated=? WHERE id=?',
+            [acct.balance, acct.account_type, acct.is_liability, acct.last_updated, existing[0].id])
+        } else {
+          run('INSERT INTO net_worth_accounts VALUES (?,?,?,?,?,?,?,?)',
+            [acct.id, acct.name, acct.institution, acct.account_type, acct.is_liability, acct.balance, acct.last_updated, acct.sort_order])
+        }
       }
     }
     const totalAssets = accounts.filter(a => !a.is_liability).reduce((s, a) => s + a.balance, 0)
