@@ -14,6 +14,7 @@ export async function parsePDF(file) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
 
   const allLines = []
+  const rawTextParts = []
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum)
@@ -22,6 +23,7 @@ export async function parsePDF(file) {
     // Group text items by rounded y-coordinate to reconstruct rows
     const lineMap = new Map()
     for (const item of textContent.items) {
+      if (item.str) rawTextParts.push(item.str)
       const y = Math.round(item.transform[5])
       if (!lineMap.has(y)) lineMap.set(y, [])
       lineMap.get(y).push(item)
@@ -36,13 +38,16 @@ export async function parsePDF(file) {
     }
   }
 
-  const bank = detectBank(allLines)
+  const bank = detectBank(allLines, rawTextParts.join(' '))
   if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo.')
 
   return parseStatementLines(allLines, bank)
 }
 
-function detectBank(lines) {
+// `rawText` is the PDF's text items joined in their original (unsorted) order —
+// unlike `lines`, it can't be scrambled by side-by-side columns landing on the same
+// reconstructed row, so it's a more reliable fallback signal for detection.
+function detectBank(lines, rawText) {
   const header = lines.slice(0, 40).join(' ')
   if (/apple card|goldman sachs/i.test(header)) return APPLE
   if (/charles schwab|schwab bank|schwab one/i.test(header)) return SCHWAB
@@ -50,7 +55,7 @@ function detectBank(lines) {
   if (/jpmorgan chase|chase bank|chase card|chase\.com/i.test(header)) return CHASE
   if (/discover bank|discover card|discover\.com/i.test(header)) return DISCOVER
   if (/wells fargo/i.test(header)) return WELLS_FARGO
-  const full = lines.join(' ')
+  const full = `${lines.join(' ')} ${rawText ?? ''}`
   if (/apple card/i.test(full)) return APPLE
   if (/schwab/i.test(full)) return SCHWAB
   if (/bank of america/i.test(full)) return BOA
@@ -144,9 +149,13 @@ function parseStatementLines(lines, bank) {
 
   // Pass 2: no section headers found — scan all lines, classify purely by keywords
   for (let i = 0; i < lines.length; i++) {
-    const parsed = parseTxnLine(lines[i], year, bank, null)
-    if (parsed) {
-      parsed.description = followOnLine(lines, i, bank)
+    const checkPair = !bank.parseLine && parseCheckPairLine(lines[i], year, bank)
+    if (checkPair) { rows.push(...checkPair); continue }
+
+    const result = parseWithAmountLookahead(lines, i, year, bank, null)
+    if (result) {
+      const { row: parsed, consumed } = result
+      parsed.description = followOnLine(lines, i + consumed, bank)
       rows.push(parsed)
     }
   }
@@ -196,16 +205,88 @@ function parseSectionAware(lines, bank, year) {
     if (!sectionType) continue
 
     const isCredit = sectionType === 'credit'
-    const parsed = bank.parseLine
-      ? bank.parseLine(line, year, isCredit)
-      : parseTxnLine(line, year, bank, isCredit)
-    if (parsed) {
-      if (!bank.parseLine) parsed.description = followOnLine(lines, i, bank)
+
+    const checkPair = !bank.parseLine && parseCheckPairLine(line, year, bank)
+    if (checkPair) { rows.push(...checkPair); continue }
+
+    const result = parseWithAmountLookahead(lines, i, year, bank, isCredit)
+    if (result) {
+      const { row: parsed, consumed } = result
+      if (!bank.parseLine) parsed.description = followOnLine(lines, i + consumed, bank)
       rows.push(parsed)
     }
   }
 
   return rows
+}
+
+const MONTH_NAME_START_RE = /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}/i
+
+function startsWithDate(line, bank) {
+  if (/^\d{2}\/\d{2}(?:\/\d{2,4})?\b/.test(line)) return true
+  return !!(bank.monthNameDates && MONTH_NAME_START_RE.test(line))
+}
+
+// True if `line` looks like it continues the previous transaction (payee text
+// or the transaction's amount that wrapped past the row) rather than starting
+// a new transaction, section, or summary line.
+function isContinuationLine(line, bank) {
+  if (!line) return false
+  const t = line.trim()
+  if (!t) return false
+  if (startsWithDate(t, bank)) return false
+  if (bank.creditSection?.test(t) || bank.debitSection?.test(t) || bank.skipSection?.test(t)) return false
+  if (/^(beginning|ending|total|balance|interest rate|service fee|new balance|minimum|average daily)/i.test(t)) return false
+  return true
+}
+
+// Some statements wrap a transaction's dollar amount onto a following line —
+// a long ACH/Zelle description pushes the figure off the date's row. Retry the
+// parse by folding in up to 4 following lines when the primary line has a date
+// but no amount was found on it. Returns { row, consumed } or null.
+function parseWithAmountLookahead(lines, i, year, bank, isCredit) {
+  const direct = bank.parseLine
+    ? bank.parseLine(lines[i], year, isCredit)
+    : parseTxnLine(lines[i], year, bank, isCredit)
+  if (direct) return { row: direct, consumed: 0 }
+  if (!startsWithDate(lines[i], bank)) return null
+
+  let merged = lines[i]
+  for (let k = 1; k <= 4; k++) {
+    const next = lines[i + k]
+    if (!isContinuationLine(next, bank)) break
+    merged = `${merged} ${next}`
+    const parsed = bank.parseLine
+      ? bank.parseLine(merged, year, isCredit)
+      : parseTxnLine(merged, year, bank, isCredit)
+    if (parsed) return { row: parsed, consumed: k }
+  }
+  return null
+}
+
+// Bank of America (and similar) list checks two-per-row in the Checks table:
+// MM/DD CHECK# AMOUNT MM/DD CHECK# AMOUNT. A plain merchant-description line
+// never matches this shape, so it's safe to try for every bank.
+function parseCheckPairLine(line, year, bank) {
+  const m = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{3,6})\s+(-?[\d,]+\.\d{2})\s+(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{3,6})\s+(-?[\d,]+\.\d{2})\s*$/)
+  if (!m) return null
+  const [, d1, c1, a1, d2, c2, a2] = m
+  const toRow = (dateStr, checkNum, amtStr) => {
+    const [mm, dd] = dateStr.split('/')
+    return {
+      date: `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`,
+      merchant: `Check #${checkNum}`,
+      description: null,
+      amount: Math.abs(parseFloat(amtStr.replace(/,/g, ''))),
+      currency: 'USD',
+      amount_usd: Math.abs(parseFloat(amtStr.replace(/,/g, ''))),
+      category: null,
+      payment_method: bank.paymentMethod,
+      source: bank.source,
+      isCredit: false,
+    }
+  }
+  return [toRow(d1, c1, a1), toRow(d2, c2, a2)]
 }
 
 // Returns the next line as a description if it looks like a payee continuation,
