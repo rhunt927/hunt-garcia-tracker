@@ -17,24 +17,30 @@ export async function parsePDF(file) {
   const rawTextParts = []
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    const textContent = await page.getTextContent()
+    // A single page (e.g. one with embedded check images) can fail to extract on
+    // some devices/browsers — don't let that page sink the whole statement.
+    try {
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
 
-    // Group text items by rounded y-coordinate to reconstruct rows
-    const lineMap = new Map()
-    for (const item of textContent.items) {
-      if (item.str) rawTextParts.push(item.str)
-      const y = Math.round(item.transform[5])
-      if (!lineMap.has(y)) lineMap.set(y, [])
-      lineMap.get(y).push(item)
-    }
+      // Group text items by rounded y-coordinate to reconstruct rows
+      const lineMap = new Map()
+      for (const item of textContent.items) {
+        if (item.str) rawTextParts.push(item.str)
+        const y = Math.round(item.transform[5])
+        if (!lineMap.has(y)) lineMap.set(y, [])
+        lineMap.get(y).push(item)
+      }
 
-    // Sort y descending (top → bottom on page), then x ascending within each row
-    const sortedYs = [...lineMap.keys()].sort((a, b) => b - a)
-    for (const y of sortedYs) {
-      const lineItems = lineMap.get(y).sort((a, b) => a.transform[4] - b.transform[4])
-      const text = lineItems.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()
-      if (text) allLines.push(text)
+      // Sort y descending (top → bottom on page), then x ascending within each row
+      const sortedYs = [...lineMap.keys()].sort((a, b) => b - a)
+      for (const y of sortedYs) {
+        const lineItems = lineMap.get(y).sort((a, b) => a.transform[4] - b.transform[4])
+        const text = lineItems.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()
+        if (text) allLines.push(text)
+      }
+    } catch (err) {
+      console.warn(`PDF page ${pageNum} failed to extract, skipping it:`, err)
     }
   }
 
