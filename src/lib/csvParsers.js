@@ -99,6 +99,7 @@ function detectParser(headers) {
   if (h.includes('transaction date') && h.includes('post date') && h.includes('memo')) return CHASE
   if (h.includes('trans. date') && h.includes('post date')) return DISCOVER
   if (h.includes('posted date') && h.includes('payee') && h.includes('reference number')) return BOA
+  if (h.includes('date') && h.includes('description') && h.includes('amount') && h.includes('check #') && h.includes('status')) return CREDIT_CARD
   if (h.includes('checknumber') && h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB_INVESTOR
   if (h.some(c => c.includes('withdrawal')) && h.some(c => c.includes('deposit'))) return SCHWAB
   return GENERIC
@@ -191,6 +192,25 @@ const BOA = {
   },
 }
 
+const CREDIT_CARD = {
+  name: 'Credit Card',
+  parse: (row) => {
+    const amount = parseFloat(row['AMOUNT'])
+    if (isNaN(amount) || amount >= 0) return null // skip payments/credits/refunds
+    return {
+      date: mmddyyyy(row['DATE']),
+      merchant: row['DESCRIPTION']?.trim(),
+      description: null,
+      amount: Math.abs(amount),
+      currency: 'USD',
+      amount_usd: Math.abs(amount),
+      category: null,
+      payment_method: 'Credit Card',
+      source: 'csv_credit_card',
+    }
+  },
+}
+
 const SCHWAB = {
   name: 'Schwab',
   parse: (row) => {
@@ -244,9 +264,10 @@ const GENERIC = {
   name: 'Generic',
   parse: (row) => {
     const vals = Object.values(row)
-    const amountVal = vals.find(v => /^\$?[\d,]+\.\d{2}$/.test(String(v)?.trim()))
-    const amount = amountVal ? parseFloat(String(amountVal).replace(/[$,]/g, '')) : null
-    if (!amount || amount <= 0) return null
+    const amountVal = vals.find(v => /^-?\$?[\d,]+\.\d{2}$/.test(String(v)?.trim()))
+    const rawAmount = amountVal ? parseFloat(String(amountVal).replace(/[$,]/g, '')) : null
+    if (!rawAmount || rawAmount >= 0) return null // skip payments/credits
+    const amount = Math.abs(rawAmount)
     const dateVal = vals.find(v => /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(String(v)))
     const descKey = Object.keys(row).find(k => /desc|merchant|payee|name/i.test(k))
     return {
