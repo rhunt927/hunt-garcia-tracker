@@ -202,12 +202,22 @@ function parseWFLine(line, year, isCredit) {
   }
 }
 
-// A genuine table header is just column labels — it never carries a dollar
-// amount. Account Summary boxes reuse the same section phrases next to a
-// dollar figure (e.g. "Purchases +$2,126.51"), which would otherwise be
-// mistaken for the real header and lock in the wrong section for every
-// transaction that follows.
-const HAS_DOLLAR_AMOUNT = /\d+\.\d{2}/
+// A genuine table header's section phrase is followed by more column labels
+// (or nothing) — never a dollar amount right next to it. Account Summary
+// boxes reuse the same section phrases immediately followed by a dollar
+// figure (e.g. "Purchases +$2,126.51"), which would otherwise be mistaken
+// for the real header. Only check text right after the match, not the whole
+// line — on statements where a side-by-side box (e.g. a rewards summary)
+// shares the header row's y-coordinate, its own dollar figure can land much
+// further down the same reconstructed line and must not disqualify the match.
+const NEARBY_DOLLAR_AMOUNT = /^.{0,20}\d+\.\d{2}/
+
+function isRealHeaderMatch(line, sectionRegex) {
+  if (!sectionRegex) return false
+  const m = sectionRegex.exec(line)
+  if (!m) return false
+  return !NEARBY_DOLLAR_AMOUNT.test(line.slice(m.index + m[0].length))
+}
 
 function parseSectionAware(lines, bank, year) {
   const rows = []
@@ -215,10 +225,9 @@ function parseSectionAware(lines, bank, year) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const looksLikeHeader = !HAS_DOLLAR_AMOUNT.test(line)
     if (bank.skipSection?.test(line))   { sectionType = null;     continue }
-    if (looksLikeHeader && bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
-    if (looksLikeHeader && bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
+    if (isRealHeaderMatch(line, bank.creditSection)) { sectionType = 'credit'; continue }
+    if (isRealHeaderMatch(line, bank.debitSection))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
     const isCredit = sectionType === 'credit'
