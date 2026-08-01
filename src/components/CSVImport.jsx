@@ -3,6 +3,7 @@ import { Upload, X, CheckSquare, Square, AlertTriangle, HardDrive, FolderOpen } 
 import { parseCSV, parseTxt } from '../lib/csvParsers'
 import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
+import { buildCategoryMemory, guessCategory } from '../lib/categoryMemory'
 import { CategorySelect } from './CategorySelect'
 import { ExpenseForm } from './ExpenseForm'
 
@@ -49,12 +50,13 @@ export function CSVImport({
       const isTxt = name.endsWith('.txt') || file.type === 'text/plain'
       const { rows: parsed, bankName: bank } = isPDF ? await parsePDF(file) : isTxt ? await parseTxt(file) : await parseCSV(file)
       setBankName(bank)
+      const categoryMemory = buildCategoryMemory(existingExpenses)
       setRows(parsed.map(r => ({
         ...r,
         _id: crypto.randomUUID(),
         selected: true,
         isDuplicate: isDuplicate(r),
-        category: r.category ?? defaultCategory(),
+        category: r.category ?? guessCategory(r.merchant, categoryMemory) ?? defaultCategory(),
         type: r.type ?? defaultType(r.isCredit),
       })))
     } catch (e) {
