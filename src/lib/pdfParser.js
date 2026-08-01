@@ -104,8 +104,11 @@ const DISCOVER = {
   name: 'Discover',
   paymentMethod: 'Discover',
   source: 'pdf_discover',
-  creditSection: /^(payments and credits)/i,
-  debitSection: /^(purchases|transactions)/i,
+  // Discover's real table header wraps "TRANS." onto its own line, leaving
+  // "DATE PAYMENTS AND CREDITS AMOUNT" / "DATE PURCHASES ... AMOUNT" as the
+  // header row — so the section phrase isn't always the first word.
+  creditSection: /^(?:trans\.?\s*)?(?:date\s+)?payments and credits\b/i,
+  debitSection: /^(?:trans\.?\s*)?(?:date\s+)?(purchases|transactions)\b/i,
   skipSection: /^(total purchases|total transactions|total payments)/i,
 }
 
@@ -199,15 +202,23 @@ function parseWFLine(line, year, isCredit) {
   }
 }
 
+// A genuine table header is just column labels — it never carries a dollar
+// amount. Account Summary boxes reuse the same section phrases next to a
+// dollar figure (e.g. "Purchases +$2,126.51"), which would otherwise be
+// mistaken for the real header and lock in the wrong section for every
+// transaction that follows.
+const HAS_DOLLAR_AMOUNT = /\d+\.\d{2}/
+
 function parseSectionAware(lines, bank, year) {
   const rows = []
   let sectionType = null
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    const looksLikeHeader = !HAS_DOLLAR_AMOUNT.test(line)
     if (bank.skipSection?.test(line))   { sectionType = null;     continue }
-    if (bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
-    if (bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
+    if (looksLikeHeader && bank.creditSection?.test(line)) { sectionType = 'credit'; continue }
+    if (looksLikeHeader && bank.debitSection?.test(line))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
 
     const isCredit = sectionType === 'credit'
@@ -366,7 +377,8 @@ function parseTxnLine(line, year, bank, isCredit) {
   // Description is everything before the first dollar amount, minus trailing % cashback indicators
   const description = rest.slice(0, firstMatch.index).trim()
     .replace(/\s+\d+%\s*$/, '')   // strip trailing "3%" cashback percentage
-    .replace(/\s*\$$/, '')
+    .replace(/\s*\$$/, '')        // strip a trailing bare "$" left when the match starts right at the sign
+    .replace(/\s+-$/, '')         // strip a trailing "-" left when a negative amount ("-$X.XX") glues its sign on
     .trim()
   if (!description || description.length < 2) return null
 
