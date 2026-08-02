@@ -11,7 +11,11 @@ try {
 // Returns { rows, bankName } or throws
 export async function parsePDF(file) {
   const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  // Without this, pdf.js can't substitute glyph data missing from a PDF's embedded
+  // subset font (e.g. "®" not in the subset) — on iOS Safari that throws instead of
+  // falling back, silently failing text extraction on every page of the statement.
+  const standardFontDataUrl = `${import.meta.env.BASE_URL}standard_fonts/`
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, standardFontDataUrl }).promise
 
   const allLines = []
   const rawTextParts = []
