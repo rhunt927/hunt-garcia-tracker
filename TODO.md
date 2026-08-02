@@ -23,16 +23,34 @@
 
 ## Known Issues
 
+- [x] **PDF import failing on iOS for any bank — root cause found and fixed (2026-08-02)**
+  Same `TypeError: undefined is not a function (near '...e of t...')` signature as the
+  BofA crash below started showing up on a Discover PDF too (as "Unrecognized bank
+  statement PDF" on every page, not just one) — confirmed via real Safari remote
+  debugging (Develop menu, device attached over USB) that this was never bank- or
+  page-content-specific. Root cause: `pdfjs-dist` v6's own `getTextContent()` does
+  `for await (const value of readableStream)` internally, which needs the browser's
+  `ReadableStream` to support native async iteration — missing/broken on this iOS
+  Safari version, so it throws instead of degrading gracefully (Node.js tolerates it
+  fine, which is why local testing never caught it). Fix: bypass `getTextContent()`
+  entirely and pump `page.streamTextContent()` manually via `getReader()`/`read()`,
+  which only needs the long-supported `ReadableStream` reader API. Also bundled
+  pdf.js's `standard_fonts` into `public/` and wired up `standardFontDataUrl` (fixes
+  a separate, real glyph-fallback gap for embedded subset fonts) — turned out not to
+  be the cause of this particular crash, but worth keeping regardless.
+  Confirmed fixed for Discover PDF import on real device. **Should also fix the BofA
+  crash below** (identical error signature, same fix touches the same code path) —
+  pending confirmation with a real BofA statement PDF.
+
 - [ ] **BofA PDF import crashes on iOS PWA for real multi-page statements (2026-07-03)**
   Real-world BofA statement PDFs (10 pages, includes embedded check images on one page)
   crash during `pdf.js` text extraction on Richard's installed iPad PWA — `TypeError:
-  undefined is not a function (near '...e of t...')`. Confirmed NOT in our own
-  `pdfParser.js` code (traced the deployed minified bundle line by line); the crash is
-  inside `pdfjs-dist` v6's own page-processing internals. Wrapping each page's extraction
-  in try/catch (already shipped) stops the hard crash but every page fails silently,
-  leaving no text to detect — so it now fails with "Unrecognized bank statement PDF"
-  instead of crashing, but still doesn't import.
-  Ruled out:
+  undefined is not a function (near '...e of t...')`. Very likely the exact same root
+  cause just fixed above (see 2026-08-02 entry) — same error signature, same "every
+  page fails" pattern. Not yet confirmed fixed for BofA specifically; needs a real
+  BofA statement PDF tested on-device. If it turns out NOT to be the same cause, the
+  workaround below still applies.
+  Ruled out (from the original investigation, before the 2026-08-02 fix):
   - Downgrading `pdfjs-dist` to v3.x for classic (non-module) worker support — reverted;
     no version is both patched against GHSA-wgrm-67xf-hhpq (arbitrary JS execution from a
     malicious PDF, fixed in 4.2.67+) and still ships a classic worker (dropped by 4.2.67).
@@ -40,14 +58,8 @@
   - Forcing pdf.js's "fake worker" (main-thread, no separate Worker thread) fallback —
     technically doesn't work; the fallback also dynamically imports its worker code from
     the same `workerSrc` URL, so breaking the real worker also breaks the fallback.
-  Next step: need a real unminified stack trace from the device (Mac + Safari Develop
-  menu remote debugging on the iPad) to actually pinpoint the failing pdf.js function,
-  since further guessing against the minified bundle isn't productive.
   Workaround in the meantime: BofA's Online Banking "Download transactions" CSV/TXT
   export (already supported by this app's importer) sidesteps pdf.js entirely.
-  All other real bug fixes from this session are live: multi-line/wrapped-amount
-  transactions and two-checks-per-row are now parsed correctly wherever `pdf.js` itself
-  succeeds in extracting text — this is purely the extraction-layer crash blocking it.
 
 ---
 
