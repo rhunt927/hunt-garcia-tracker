@@ -8,6 +8,21 @@ try {
   pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 }
 
+// pdf.js's own getTextContent() does `for await (const value of readableStream)`,
+// which needs the browser's ReadableStream to support native async iteration — missing
+// on some iOS Safari versions, where it throws "undefined is not a function" instead of
+// failing gracefully. Pump the stream manually with getReader()/read() to avoid that path.
+async function getPageTextItems(page) {
+  const reader = page.streamTextContent({ includeMarkedContent: false, disableNormalization: false }).getReader()
+  const items = []
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    items.push(...value.items)
+  }
+  return items
+}
+
 // Returns { rows, bankName } or throws
 export async function parsePDF(file) {
   const arrayBuffer = await file.arrayBuffer()
@@ -25,11 +40,11 @@ export async function parsePDF(file) {
     // some devices/browsers — don't let that page sink the whole statement.
     try {
       const page = await pdf.getPage(pageNum)
-      const textContent = await page.getTextContent()
+      const items = await getPageTextItems(page)
 
       // Group text items by rounded y-coordinate to reconstruct rows
       const lineMap = new Map()
-      for (const item of textContent.items) {
+      for (const item of items) {
         if (item.str) rawTextParts.push(item.str)
         const y = Math.round(item.transform[5])
         if (!lineMap.has(y)) lineMap.set(y, [])
