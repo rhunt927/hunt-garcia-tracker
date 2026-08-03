@@ -324,12 +324,18 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
+        <BuildFooter />
       </div>
     )
   }
 
   if (!user) {
-    return <LoginScreen onLogin={login} gisReady={gisReady} />
+    return (
+      <>
+        <LoginScreen onLogin={login} gisReady={gisReady} />
+        <BuildFooter />
+      </>
+    )
   }
 
   return (
@@ -500,10 +506,17 @@ export default function App() {
             )}
           </ErrorBoundary>
         )}
-
-        <p className="text-center text-[10px] text-gray-600 mt-6 mb-2">Build {__BUILD_ID__}</p>
       </div>
+      <BuildFooter />
     </div>
+  )
+}
+
+function BuildFooter() {
+  return (
+    <p className="fixed bottom-1 inset-x-0 text-center text-[10px] text-gray-500/70 pointer-events-none z-20">
+      Build {__BUILD_ID__}
+    </p>
   )
 }
 
