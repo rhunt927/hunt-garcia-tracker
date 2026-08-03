@@ -275,13 +275,16 @@ export default function App() {
     await save()
   }, [run, save])
 
-  const handleCSVImport = useCallback(async (rows) => {
+  // `toUpdate` covers rows that matched an already-imported expense (e.g. a mid-month
+  // CSV pull, later reconciled against the official monthly PDF) — refresh that row
+  // in place instead of inserting a second, duplicate expense.
+  const handleCSVImport = useCallback(async (toInsert, toUpdate = []) => {
     setSaving(true)
     try {
       // Ensure any categories/payment methods used in this import exist in their tables
       const seenCategories = new Set()
       const seenPaymentMethods = new Set()
-      for (const e of rows) {
+      for (const e of [...toInsert, ...toUpdate]) {
         if (e.category && !seenCategories.has(e.category)) {
           run('INSERT OR IGNORE INTO categories VALUES (?)', [e.category])
           seenCategories.add(e.category)
@@ -291,7 +294,7 @@ export default function App() {
           seenPaymentMethods.add(e.payment_method)
         }
       }
-      for (const e of rows) {
+      for (const e of toInsert) {
         run(
           `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [e.id, e.date, e.merchant, e.description, e.amount, e.currency,
@@ -299,9 +302,18 @@ export default function App() {
            e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0, null]
         )
       }
+      for (const e of toUpdate) {
+        run(
+          `UPDATE expenses SET merchant=?, description=?, amount=?, currency=?,
+           amount_usd=?, payment_method=?, source=?, updated_at=? WHERE id=?`,
+          [e.merchant, e.description, e.amount, e.currency,
+           e.amount_usd, e.payment_method, e.source, e.updated_at, e.id]
+        )
+      }
       await save()
       // After import, jump to the list filtered to the imported date range
       // so the user can see what was just imported regardless of current month
+      const rows = [...toInsert, ...toUpdate]
       if (rows.length > 0) {
         const dates = rows.map(e => e.date).filter(Boolean).sort()
         setListFilters({ dateFrom: dates[0], dateTo: dates[dates.length - 1] })

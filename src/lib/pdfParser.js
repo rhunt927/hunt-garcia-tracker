@@ -499,6 +499,7 @@ function parseTxnLine(line, year, bank, isCredit) {
   const rawAmount = parseFloat(chosenMatch[1].replace(/,/g, ''))
   const amount = Math.abs(rawAmount)
   if (!amount || amount <= 0) return null
+  const negativeAmount = rawAmount < 0
 
   // Description is everything before the first dollar amount, minus trailing % cashback indicators
   const description = rest.slice(0, firstMatch.index).trim()
@@ -511,8 +512,12 @@ function parseTxnLine(line, year, bank, isCredit) {
   // Skip obvious summary/balance lines
   if (/^(beginning|ending|total|balance|interest paid|service fee|new balance|minimum)/i.test(description)) return null
 
-  // null means auto-classify from description keywords
-  const credit = isCredit === null ? keywordOverride(description, false) : !!isCredit
+  // A negative amount printed inside a purchases/transactions section is a merchant
+  // refund, not a new charge — trust the sign over the section/keyword classification.
+  // Otherwise null means auto-classify from description keywords.
+  const credit = negativeAmount
+    ? true
+    : (isCredit === null ? keywordOverride(description, false) : !!isCredit)
 
   return {
     date: `${yyyy}-${mm}-${dd}`,

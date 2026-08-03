@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Upload, X, CheckSquare, Square, AlertTriangle, HardDrive, FolderOpen } from 'lucide-react'
+import { Upload, X, CheckSquare, Square, AlertTriangle, HardDrive, FolderOpen, RefreshCw } from 'lucide-react'
 import { parseCSV, parseTxt } from '../lib/csvParsers'
 import { parsePDF } from '../lib/pdfParser'
 import { toTitleCase } from '../lib/utils'
@@ -32,8 +32,12 @@ export function CSVImport({
     return (m ?? '').toLowerCase().replace(/\s+/g, '')
   }
 
-  function isDuplicate(row) {
-    return existingExpenses.some(e =>
+  // Finds an already-saved expense this row refers to — e.g. a mid-month CSV pull
+  // followed later by the official monthly PDF for the same card. Returns the
+  // existing expense (or undefined). Matched rows get their existing row refreshed
+  // on import instead of creating a second, duplicate expense.
+  function findMatch(row) {
+    return existingExpenses.find(e =>
       e.date === row.date &&
       e.amount_usd === row.amount_usd &&
       normalizeMerchant(e.merchant) === normalizeMerchant(row.merchant)
@@ -61,7 +65,7 @@ export function CSVImport({
         ...r,
         _id: crypto.randomUUID(),
         selected: true,
-        isDuplicate: isDuplicate(r),
+        match: findMatch(r),
         category: r.category ?? guessCategory(r.merchant, categoryMemory) ?? defaultCategory(),
         type: r.type ?? defaultType(r.isCredit),
       })))
@@ -141,9 +145,8 @@ export function CSVImport({
   }
 
   function toggleAll() {
-    const nonDupes = rows.filter(r => !r.isDuplicate)
-    const allSelected = nonDupes.every(r => r.selected)
-    setRows(rs => rs.map(r => r.isDuplicate ? r : { ...r, selected: !allSelected }))
+    const allSelected = rows.every(r => r.selected)
+    setRows(rs => rs.map(r => ({ ...r, selected: !allSelected })))
   }
 
   function typeFlags(typeName) {
@@ -175,35 +178,54 @@ export function CSVImport({
       category: expense.category,
       payment_method: expense.payment_method,
       notes: expense.notes,
-      isDuplicate: isDuplicate({ date: expense.date, amount_usd: expense.amount_usd, merchant: expense.merchant }),
+      match: findMatch({ date: expense.date, amount_usd: expense.amount_usd, merchant: expense.merchant }),
     } : r))
     setEditingRow(null)
   }
 
   function handleImport() {
-    const toImport = rows
-      .filter(r => r.selected && !r.isDuplicate)
-      .map(r => {
-        const now = new Date().toISOString()
-        return {
-          id: crypto.randomUUID(),
-          date: r.date,
-          merchant: r.merchant ?? null,
-          description: r.description ?? null,
-          amount: r.amount,
-          currency: r.currency,
-          amount_usd: r.amount_usd,
-          type: r.type ?? 'Expense',
-          category: r.category,
-          payment_method: r.payment_method ?? null,
-          receipt_filename: null,
-          source: r.source,
-          notes: r.notes ?? null,
-          created_at: now,
-          updated_at: now,
-        }
-      })
-    onImport(toImport)
+    const selected = rows.filter(r => r.selected)
+    const now = new Date().toISOString()
+
+    const toInsert = selected
+      .filter(r => !r.match)
+      .map(r => ({
+        id: crypto.randomUUID(),
+        date: r.date,
+        merchant: r.merchant ?? null,
+        description: r.description ?? null,
+        amount: r.amount,
+        currency: r.currency,
+        amount_usd: r.amount_usd,
+        type: r.type ?? 'Expense',
+        category: r.category,
+        payment_method: r.payment_method ?? null,
+        receipt_filename: null,
+        source: r.source,
+        notes: r.notes ?? null,
+        created_at: now,
+        updated_at: now,
+      }))
+
+    // Refreshes an already-imported (e.g. mid-month CSV) row with the more
+    // authoritative data from this import — merchant text, amount, and payment
+    // method — without touching category/notes the user may have already set.
+    const toUpdate = selected
+      .filter(r => r.match)
+      .map(r => ({
+        id: r.match.id,
+        date: r.date,
+        merchant: r.merchant ?? null,
+        description: r.description ?? null,
+        amount: r.amount,
+        currency: r.currency,
+        amount_usd: r.amount_usd,
+        payment_method: r.payment_method ?? null,
+        source: r.source,
+        updated_at: now,
+      }))
+
+    onImport(toInsert, toUpdate)
   }
 
   // Show full ExpenseForm when editing a row
@@ -236,10 +258,11 @@ export function CSVImport({
     )
   }
 
-  const selectableRows = rows.filter(r => !r.isDuplicate)
-  const selectedCount = selectableRows.filter(r => r.selected).length
+  const selectedCount = rows.filter(r => r.selected).length
+  const newCount = rows.filter(r => r.selected && !r.match).length
+  const updateCount = rows.filter(r => r.selected && r.match).length
   const total = rows
-    .filter(r => r.selected && !r.isDuplicate)
+    .filter(r => r.selected && !r.match)
     .reduce((s, r) => s + r.amount_usd, 0)
 
   return (
@@ -347,9 +370,9 @@ export function CSVImport({
             <span className="text-gray-400">
               <span className="text-white font-medium">{bankName}</span>
               {' · '}{rows.length} transactions
-              {rows.filter(r => r.isDuplicate).length > 0 && (
-                <span className="text-yellow-500 ml-2">
-                  ({rows.filter(r => r.isDuplicate).length} duplicates skipped)
+              {rows.filter(r => r.match).length > 0 && (
+                <span className="text-blue-400 ml-2">
+                  ({rows.filter(r => r.match).length} match existing — will update, not duplicate)
                 </span>
               )}
             </span>
@@ -367,7 +390,7 @@ export function CSVImport({
                 <tr>
                   <th className="px-3 py-2 text-left w-8">
                     <button onClick={toggleAll}>
-                      {selectableRows.every(r => r.selected)
+                      {rows.every(r => r.selected)
                         ? <CheckSquare size={15} className="text-blue-400" />
                         : <Square size={15} className="text-gray-500" />}
                     </button>
@@ -381,35 +404,34 @@ export function CSVImport({
               </thead>
               <tbody className="divide-y divide-white/5">
                 {rows.map(row => (
-                  <tr key={row._id} className={row.isDuplicate ? 'opacity-40' : 'cursor-pointer'}>
+                  <tr key={row._id} className="cursor-pointer">
                     <td className="px-3 py-2">
-                      {row.isDuplicate ? (
-                        <span title="Duplicate" className="text-yellow-600">
-                          <AlertTriangle size={13} />
-                        </span>
-                      ) : (
-                        <button onClick={() => toggleRow(row._id)}>
-                          {row.selected
-                            ? <CheckSquare size={15} className="text-blue-400" />
-                            : <Square size={15} className="text-gray-500" />}
-                        </button>
-                      )}
+                      <button onClick={() => toggleRow(row._id)}>
+                        {row.selected
+                          ? <CheckSquare size={15} className="text-blue-400" />
+                          : <Square size={15} className="text-gray-500" />}
+                      </button>
                     </td>
                     <td
                       className="px-3 py-2 text-gray-400 whitespace-nowrap hover:text-white transition-colors"
-                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                      onClick={() => setEditingRow(row)}
                     >
                       {row.date}
+                      {row.match && (
+                        <span title="Matches an existing transaction — will update it, not duplicate it" className="ml-1 text-blue-400">
+                          <RefreshCw size={10} className="inline" />
+                        </span>
+                      )}
                     </td>
                     <td
                       className="px-3 py-2 text-white max-w-[140px] truncate hover:text-blue-300 transition-colors"
-                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                      onClick={() => setEditingRow(row)}
                     >
                       {row.merchant}
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      {row.isDuplicate ? (
-                        <span className="text-xs text-gray-600">{row.type}</span>
+                      {row.match ? (
+                        <span className="text-xs text-gray-600">{row.match.type}</span>
                       ) : (
                         <select
                           value={row.type ?? ''}
@@ -423,8 +445,8 @@ export function CSVImport({
                       )}
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      {row.isDuplicate ? (
-                        <span className="text-xs text-gray-600">{toTitleCase(row.category)}</span>
+                      {row.match ? (
+                        <span className="text-xs text-gray-600" title="Category is kept as-is on update">{toTitleCase(row.match.category)}</span>
                       ) : (
                         <CategorySelect
                           value={row.category}
@@ -442,7 +464,7 @@ export function CSVImport({
                         row.isTransfer ? 'text-gray-400 hover:text-gray-300' :
                         'text-red-400 hover:text-red-300'
                       }`}
-                      onClick={() => !row.isDuplicate && setEditingRow(row)}
+                      onClick={() => setEditingRow(row)}
                     >
                       {row.isCredit ? '+' : ''}{row.currency !== 'USD' ? `${row.amount.toFixed(2)} ${row.currency}` : `$${row.amount_usd.toFixed(2)}`}
                     </td>
@@ -458,13 +480,16 @@ export function CSVImport({
           <div className="flex items-center justify-between pt-1">
             <span className="text-sm text-gray-400">
               {selectedCount} selected · <span className="text-white">${total.toFixed(2)}</span>
+              {updateCount > 0 && <span className="text-blue-400">{` (+${updateCount} update${updateCount === 1 ? '' : 's'})`}</span>}
             </span>
             <button
               onClick={handleImport}
               disabled={selectedCount === 0}
               className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
             >
-              Import {selectedCount > 0 ? `${selectedCount} expenses` : ''}
+              {selectedCount > 0
+                ? [newCount > 0 && `${newCount} new`, updateCount > 0 && `${updateCount} update${updateCount === 1 ? '' : 's'}`].filter(Boolean).join(', ')
+                : 'Import'}
             </button>
           </div>
         </>
