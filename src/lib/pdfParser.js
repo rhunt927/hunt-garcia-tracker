@@ -64,7 +64,7 @@ export async function parsePDF(file) {
   }
 
   const bank = detectBank(allLines, rawTextParts.join(' '))
-  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo.')
+  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo, Costco Anywhere Visa, Meijer Mastercard.')
 
   return parseStatementLines(allLines, bank)
 }
@@ -80,6 +80,8 @@ function detectBank(lines, rawText) {
   if (/jpmorgan chase|chase bank|chase card|chase\.com/i.test(header)) return CHASE
   if (/discover bank|discover card|discover\.com/i.test(header)) return DISCOVER
   if (/wells fargo/i.test(header)) return WELLS_FARGO
+  if (/costco anywhere visa/i.test(header)) return CITI_COSTCO
+  if (/meijer.*mastercard/i.test(header)) return CITI_MEIJER
   const full = `${lines.join(' ')} ${rawText ?? ''}`
   if (/apple card/i.test(full)) return APPLE
   if (/schwab/i.test(full)) return SCHWAB
@@ -87,6 +89,8 @@ function detectBank(lines, rawText) {
   if (/\bchase\b/i.test(full)) return CHASE
   if (/\bdiscover\b/i.test(full)) return DISCOVER
   if (/wells fargo/i.test(full)) return WELLS_FARGO
+  if (/costco anywhere visa/i.test(full)) return CITI_COSTCO
+  if (/meijer.*mastercard/i.test(full)) return CITI_MEIJER
   return null
 }
 
@@ -155,11 +159,46 @@ const WELLS_FARGO = {
   parseLine: parseWFLine,
 }
 
+// Costco Anywhere Visa (Citibank). Purchase rows carry two dates (sale, post);
+// credit/payment rows carry one date and a trailing " - $amount" instead of a
+// leading minus sign. There's no plain "Purchases" header — each batch is
+// preceded by a rate-plan label like "Promo Purchase-Offer 4 (9.990%)" or
+// "Standard Purch", so debitSection matches on that instead.
+const CITI_COSTCO = {
+  name: 'Costco Anywhere Visa',
+  paymentMethod: 'Costco Visa',
+  source: 'pdf_citi_costco',
+  creditSection: /^payments,?\s*credits?(\s*and adjustments)?/i,
+  // "promo purchase.*" consumes the whole "(9.990%)" rate suffix so the shared
+  // isRealHeaderMatch dollar-decoy check (which also matches percentages like
+  // "9.990") doesn't see it as trailing text and wrongly reject the header.
+  debitSection: /^(promo purchase.*|standard purch|purchases)/i,
+  skipSection: /^(fees charged|interest charged|20\d{2} totals|interest charge calculation|account messages)/i,
+  parseLine: parseCitiCostcoLine,
+}
+
+// Meijer Mastercard (Citibank). All transactions share one "TRANSACTIONS"
+// table — credit vs. debit isn't determined by section, but by a trailing
+// "-" glued directly onto the amount (e.g. "$ 74.89-"). parseLine ignores
+// the section-derived isCredit and reads the sign off the line itself.
+const CITI_MEIJER = {
+  name: 'Meijer Mastercard',
+  paymentMethod: 'Meijer Mastercard',
+  source: 'pdf_meijer',
+  creditSection: /^trans date\s+description/i,
+  debitSection: /^trans date\s+description/i,
+  skipSection: /^(fees$|interest charged|activity and promotions detail|rewards summary|interest charge calculation)/i,
+  parseLine: parseMeijerLine,
+}
+
 // ─── Core parser ─────────────────────────────────────────────────────────────
 
 function parseStatementLines(lines, bank) {
   let year = new Date().getFullYear()
   for (const line of lines) {
+    // "Member Since 20XX" (Citi cardholder tenure) isn't the statement year —
+    // it repeats on every page ahead of the real statement date/period lines.
+    if (/member since/i.test(line)) continue
     const m = line.match(/\b(20\d{2})\b/)
     if (m) { year = parseInt(m[1]); break }
   }
@@ -218,6 +257,59 @@ function parseWFLine(line, year, isCredit) {
     payment_method: 'Wells Fargo Credit Card',
     source: 'pdf_wf',
     isCredit: !!isCredit,
+  }
+}
+
+// Costco (Citi) purchase row: "MM/DD MM/DD DESCRIPTION $AMOUNT" (sale date, post date).
+// Credit/payment row: "MM/DD DESCRIPTION - $AMOUNT" (note the standalone "-" before
+// the amount, rather than a leading minus sign on the number itself).
+function parseCitiCostcoLine(line, year, isCredit) {
+  const purchase = line.match(/^(\d{2}\/\d{2})\s+\d{2}\/\d{2}\s+(.+?)\s+\$?\s*([\d,]+\.\d{2})\s*$/)
+  const credit = !purchase && line.match(/^(\d{2}\/\d{2})\s+(.+?)\s+-\s+\$?\s*([\d,]+\.\d{2})\s*$/)
+  const m = purchase || credit
+  if (!m) return null
+  const [, dateStr, desc, amtStr] = m
+  const description = desc.trim()
+  if (!description || description.length < 2) return null
+  const amount = parseFloat(amtStr.replace(/,/g, ''))
+  if (!amount || amount <= 0) return null
+  const [mm, dd] = dateStr.split('/')
+  return {
+    date: `${year}-${mm}-${dd}`,
+    merchant: description,
+    description: null,
+    amount,
+    currency: 'USD',
+    amount_usd: amount,
+    category: null,
+    payment_method: 'Costco Visa',
+    source: 'pdf_citi_costco',
+    isCredit: purchase ? !!isCredit : true,
+  }
+}
+
+// Meijer (Citi) row: "MM/DD DESCRIPTION REFERENCE# $ AMOUNT[-]" — a trailing "-"
+// glued onto the amount (no space) marks a credit/payment; its absence means a purchase.
+function parseMeijerLine(line, year) {
+  const m = line.match(/^(\d{2}\/\d{2})\s+(.+?)\s+\S+\s+\$\s*([\d,]+\.\d{2})(-)?\s*$/)
+  if (!m) return null
+  const [, dateStr, desc, amtStr, creditFlag] = m
+  const description = desc.trim()
+  if (!description || description.length < 2) return null
+  const amount = parseFloat(amtStr.replace(/,/g, ''))
+  if (!amount || amount <= 0) return null
+  const [mm, dd] = dateStr.split('/')
+  return {
+    date: `${year}-${mm}-${dd}`,
+    merchant: description,
+    description: null,
+    amount,
+    currency: 'USD',
+    amount_usd: amount,
+    category: null,
+    payment_method: 'Meijer Mastercard',
+    source: 'pdf_meijer',
+    isCredit: !!creditFlag,
   }
 }
 

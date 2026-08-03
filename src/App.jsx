@@ -278,12 +278,17 @@ export default function App() {
   const handleCSVImport = useCallback(async (rows) => {
     setSaving(true)
     try {
-      // Ensure any categories used in this import exist in the categories table
-      const seen = new Set()
+      // Ensure any categories/payment methods used in this import exist in their tables
+      const seenCategories = new Set()
+      const seenPaymentMethods = new Set()
       for (const e of rows) {
-        if (e.category && !seen.has(e.category)) {
+        if (e.category && !seenCategories.has(e.category)) {
           run('INSERT OR IGNORE INTO categories VALUES (?)', [e.category])
-          seen.add(e.category)
+          seenCategories.add(e.category)
+        }
+        if (e.payment_method && !seenPaymentMethods.has(e.payment_method)) {
+          run('INSERT OR IGNORE INTO payment_methods VALUES (?)', [e.payment_method])
+          seenPaymentMethods.add(e.payment_method)
         }
       }
       for (const e of rows) {
