@@ -2,9 +2,21 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+
+function gitShortSha() {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'dev'
+  }
+}
 
 export default defineConfig({
   base: '/hunt-garcia-tracker/',
+  define: {
+    __BUILD_ID__: JSON.stringify(`${gitShortSha()}-${new Date().toISOString().slice(0, 16).replace('T', ' ')}`),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -24,3 +24,7 @@ client_secret*.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local DB backups (contain financial data, never commit)
+db_backups/
+*.db

@@ -26,11 +26,17 @@ export function CSVImport({
     return categories.find(c => c.toLowerCase() === 'other') ?? categories[0] ?? ''
   }
 
+  // Ignores whitespace differences between parsers (e.g. "GRIL VERNON" vs "GRILVERNON"
+  // from the same statement imported as both CSV and PDF)
+  function normalizeMerchant(m) {
+    return (m ?? '').toLowerCase().replace(/\s+/g, '')
+  }
+
   function isDuplicate(row) {
     return existingExpenses.some(e =>
       e.date === row.date &&
       e.amount_usd === row.amount_usd &&
-      e.merchant?.toLowerCase() === row.merchant?.toLowerCase()
+      normalizeMerchant(e.merchant) === normalizeMerchant(row.merchant)
     )
   }
 

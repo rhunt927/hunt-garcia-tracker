@@ -133,6 +133,10 @@ const DISCOVER = {
   creditSection: /^(?:trans\.?\s*)?(?:date\s+)?payments and credits\b/i,
   debitSection: /^(?:trans\.?\s*)?(?:date\s+)?(purchases|transactions)\b/i,
   skipSection: /^(total purchases|total transactions|total payments)/i,
+  // "Recent Activity" pending lines end in PROCESSING and aren't final — a hold can be
+  // voided and re-authorized for the same amount (shown as a matching -X.XX/+X.XX pair),
+  // which would otherwise import as two separate expenses. Wait for the posted transaction.
+  skipLine: /\bPROCESSING\s*$/i,
 }
 
 const APPLE = {
@@ -216,6 +220,7 @@ function parseStatementLines(lines, bank) {
 
   // Pass 2: no section headers found — scan all lines, classify purely by keywords
   for (let i = 0; i < lines.length; i++) {
+    if (bank.skipLine?.test(lines[i])) continue
     const checkPair = !bank.parseLine && parseCheckPairLine(lines[i], year, bank)
     if (checkPair) { rows.push(...checkPair); continue }
 
@@ -340,6 +345,7 @@ function parseSectionAware(lines, bank, year) {
     if (isRealHeaderMatch(line, bank.creditSection)) { sectionType = 'credit'; continue }
     if (isRealHeaderMatch(line, bank.debitSection))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
+    if (bank.skipLine?.test(line)) continue
 
     const isCredit = sectionType === 'credit'
 

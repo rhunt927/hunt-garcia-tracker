@@ -500,6 +500,8 @@ export default function App() {
             )}
           </ErrorBoundary>
         )}
+
+        <p className="text-center text-[10px] text-gray-600 mt-6 mb-2">Build {__BUILD_ID__}</p>
       </div>
     </div>
   )
