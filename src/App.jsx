@@ -514,7 +514,7 @@ export default function App() {
 
 function BuildFooter() {
   return (
-    <p className="fixed bottom-1 inset-x-0 text-center text-[10px] text-gray-500/70 pointer-events-none z-20">
+    <p className="fixed bottom-1 inset-x-0 text-center text-[11px] text-gray-300 pointer-events-none z-20">
       Build {__BUILD_ID__}
     </p>
   )
