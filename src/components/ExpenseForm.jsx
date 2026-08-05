@@ -166,6 +166,7 @@ export function ExpenseForm({ categories, paymentMethods, exchangeRates, transac
       source: initialValues?.source ?? 'manual',
       notes: form.notes.trim() || null,
       is_recurring: form.is_recurring,
+      is_pending: initialValues?.is_pending ?? 0,
       splits: splitsValue,
       created_at: initialValues?.created_at ?? now,
       updated_at: now,

@@ -95,6 +95,7 @@ function createSchema(db) {
   try { db.run('ALTER TABLE transaction_types ADD COLUMN is_transfer INTEGER DEFAULT 0') } catch {}
   try { db.run('ALTER TABLE expenses ADD COLUMN is_recurring INTEGER DEFAULT 0') } catch {}
   try { db.run('ALTER TABLE expenses ADD COLUMN splits TEXT') } catch {}
+  try { db.run('ALTER TABLE expenses ADD COLUMN is_pending INTEGER DEFAULT 0') } catch {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS cash_entries (

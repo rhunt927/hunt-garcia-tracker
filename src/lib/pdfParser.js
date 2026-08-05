@@ -133,10 +133,11 @@ const DISCOVER = {
   creditSection: /^(?:trans\.?\s*)?(?:date\s+)?payments and credits\b/i,
   debitSection: /^(?:trans\.?\s*)?(?:date\s+)?(purchases|transactions)\b/i,
   skipSection: /^(total purchases|total transactions|total payments)/i,
-  // "Recent Activity" pending lines end in PROCESSING and aren't final — a hold can be
-  // voided and re-authorized for the same amount (shown as a matching -X.XX/+X.XX pair),
-  // which would otherwise import as two separate expenses. Wait for the posted transaction.
-  skipLine: /\bPROCESSING\s*$/i,
+  // "Recent Activity" pending lines end in PROCESSING and aren't final — excluded from
+  // the normal per-line parse (see pendingLine below) and handled separately so a hold
+  // that gets voided and re-authorized for the same amount (a matching -X.XX/+X.XX pair)
+  // doesn't import as two separate expenses. See buildDiscoverPendingRows.
+  pendingLine: /\bPROCESSING\s*$/i,
 }
 
 const APPLE = {
@@ -207,6 +208,11 @@ function parseStatementLines(lines, bank) {
     if (m) { year = parseInt(m[1]); break }
   }
 
+  // Lines like Discover's "Recent Activity" pending rows are excluded from the normal
+  // parse below (they're not final) but collected here to become their own pending rows.
+  const pendingLines = bank.pendingLine ? lines.filter(l => bank.pendingLine.test(l)) : []
+  const pendingRows = buildDiscoverPendingRows(pendingLines, year, bank)
+
   // Pass 1: strict section-aware (header must start the line)
   let rows = parseSectionAware(lines, bank, year)
 
@@ -215,12 +221,12 @@ function parseStatementLines(lines, bank) {
   // appearing under the Withdrawals header).
   if (rows.length > 0) {
     rows = rows.map(r => ({ ...r, isCredit: keywordOverride(r.merchant, r.isCredit) }))
-    return { rows, bankName: `${bank.name} (PDF)` }
+    return { rows: [...rows, ...pendingRows], bankName: `${bank.name} (PDF)` }
   }
 
   // Pass 2: no section headers found — scan all lines, classify purely by keywords
   for (let i = 0; i < lines.length; i++) {
-    if (bank.skipLine?.test(lines[i])) continue
+    if (bank.pendingLine?.test(lines[i])) continue
     const checkPair = !bank.parseLine && parseCheckPairLine(lines[i], year, bank)
     if (checkPair) { rows.push(...checkPair); continue }
 
@@ -232,11 +238,63 @@ function parseStatementLines(lines, bank) {
     }
   }
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && pendingRows.length === 0) {
     throw new Error(`No transactions found in this ${bank.name} PDF. Make sure it's a checking or credit card statement.`)
   }
 
-  return { rows, bankName: `${bank.name} (PDF)` }
+  return { rows: [...rows, ...pendingRows], bankName: `${bank.name} (PDF)` }
+}
+
+// Parses one Discover "Recent Activity" pending line, e.g.:
+// "08/01/26 PENDING UberBV UBER PENDING $ 2.90 PROCESSING"
+// The "PENDING" right after the date stands in for a post date that doesn't exist yet —
+// it isn't part of the merchant name.
+function parseDiscoverPendingLine(line, year) {
+  const m = line.match(/^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+PENDING\s+(.+?)\s+\$?\s*(-?[\d,]+\.\d{2})\s+PROCESSING\s*$/i)
+  if (!m) return null
+  const [, dateStr, merchant, amtStr] = m
+  const parts = dateStr.split('/')
+  const mm = parts[0].padStart(2, '0')
+  const dd = parts[1].padStart(2, '0')
+  const yyyy = parts[2] ? (parts[2].length === 2 ? '20' + parts[2] : parts[2]) : String(year)
+  const rawAmount = parseFloat(amtStr.replace(/,/g, ''))
+  if (isNaN(rawAmount)) return null
+  return { date: `${yyyy}-${mm}-${dd}`, merchant: merchant.trim(), rawAmount }
+}
+
+// A hold that gets voided and re-authorized shows up as a matching -X.XX/+X.XX pair
+// (same date, same amount) in the pending table — net those out rather than importing
+// either half. Genuinely pending charges (no matching opposite-sign line) survive as
+// their own pending expense rows.
+function buildDiscoverPendingRows(pendingLines, year, bank) {
+  const parsed = pendingLines.map(l => parseDiscoverPendingLine(l, year)).filter(Boolean)
+
+  const groups = new Map()
+  for (const p of parsed) {
+    const key = `${p.date}|${Math.abs(p.rawAmount).toFixed(2)}`
+    if (!groups.has(key)) groups.set(key, { pos: [], neg: [] })
+    groups.get(key)[p.rawAmount < 0 ? 'neg' : 'pos'].push(p)
+  }
+
+  const survivors = []
+  for (const { pos, neg } of groups.values()) {
+    const netCount = Math.min(pos.length, neg.length)
+    survivors.push(...pos.slice(netCount), ...neg.slice(netCount))
+  }
+
+  return survivors.map(p => ({
+    date: p.date,
+    merchant: p.merchant,
+    description: null,
+    amount: Math.abs(p.rawAmount),
+    currency: 'USD',
+    amount_usd: Math.abs(p.rawAmount),
+    category: null,
+    payment_method: bank.paymentMethod,
+    source: bank.source,
+    isCredit: p.rawAmount < 0,
+    isPending: true,
+  }))
 }
 
 // WF CC line format: CARDLAST4  MM/DD  MM/DD  REFNUM  DESCRIPTION  AMOUNT
@@ -345,7 +403,7 @@ function parseSectionAware(lines, bank, year) {
     if (isRealHeaderMatch(line, bank.creditSection)) { sectionType = 'credit'; continue }
     if (isRealHeaderMatch(line, bank.debitSection))  { sectionType = 'debit';  continue }
     if (!sectionType) continue
-    if (bank.skipLine?.test(line)) continue
+    if (bank.pendingLine?.test(line)) continue
 
     const isCredit = sectionType === 'credit'
 

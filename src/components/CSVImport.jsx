@@ -203,6 +203,7 @@ export function CSVImport({
         receipt_filename: null,
         source: r.source,
         notes: r.notes ?? null,
+        is_pending: r.isPending ? 1 : 0,
         created_at: now,
         updated_at: now,
       }))
@@ -222,10 +223,25 @@ export function CSVImport({
         amount_usd: r.amount_usd,
         payment_method: r.payment_method ?? null,
         source: r.source,
+        is_pending: r.isPending ? 1 : 0,
         updated_at: now,
       }))
 
-    onImport(toInsert, toUpdate)
+    // A row landing here as posted (not pending) means whatever this same
+    // card+date used to owe as a pending hold has since settled — Discover's
+    // pending description/amount often doesn't match the posted one at all, so
+    // exact matching can't reconcile them. Once any posted activity for a
+    // card+date comes in, clear out leftover pending rows for that same
+    // card+date that this import didn't already update in place above.
+    const postedKeys = new Set(
+      selected.filter(r => !r.isPending).map(r => `${r.payment_method}|${r.date}`)
+    )
+    const updatedIds = new Set(toUpdate.map(u => u.id))
+    const deleteIds = existingExpenses
+      .filter(e => e.is_pending && !updatedIds.has(e.id) && postedKeys.has(`${e.payment_method}|${e.date}`))
+      .map(e => e.id)
+
+    onImport(toInsert, toUpdate, deleteIds)
   }
 
   // Show full ExpenseForm when editing a row
@@ -428,6 +444,11 @@ export function CSVImport({
                       onClick={() => setEditingRow(row)}
                     >
                       {row.merchant}
+                      {row.isPending && (
+                        <span title="Still processing — Discover's own description/amount for this charge may change once it posts" className="ml-1 text-yellow-500 text-[10px] align-middle">
+                          (pending)
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       {row.match ? (

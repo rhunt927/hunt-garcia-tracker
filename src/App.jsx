@@ -67,24 +67,26 @@ export default function App() {
     try {
       if (formState === 'add') {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             expense.id, expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.category, expense.payment_method, expense.receipt_filename,
             expense.source, expense.notes, expense.created_at, expense.updated_at,
             expense.type ?? 'Expense', expense.is_recurring ?? 0, expense.splits ?? null,
+            expense.is_pending ?? 0,
           ]
         )
       } else {
         run(
           `UPDATE expenses SET date=?, merchant=?, description=?, amount=?, currency=?,
-           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=?, is_recurring=?, splits=? WHERE id=?`,
+           amount_usd=?, type=?, category=?, payment_method=?, notes=?, updated_at=?, is_recurring=?, splits=?, is_pending=? WHERE id=?`,
           [
             expense.date, expense.merchant, expense.description,
             expense.amount, expense.currency, expense.amount_usd,
             expense.type, expense.category, expense.payment_method, expense.notes,
-            expense.updated_at, expense.is_recurring ?? 0, expense.splits ?? null, expense.id,
+            expense.updated_at, expense.is_recurring ?? 0, expense.splits ?? null,
+            expense.is_pending ?? 0, expense.id,
           ]
         )
       }
@@ -277,8 +279,11 @@ export default function App() {
 
   // `toUpdate` covers rows that matched an already-imported expense (e.g. a mid-month
   // CSV pull, later reconciled against the official monthly PDF) — refresh that row
-  // in place instead of inserting a second, duplicate expense.
-  const handleCSVImport = useCallback(async (toInsert, toUpdate = []) => {
+  // in place instead of inserting a second, duplicate expense. `deleteIds` covers
+  // stale pending rows (e.g. Discover "Recent Activity" holds) whose card+date now has
+  // posted activity in this same import but couldn't be matched directly — Discover's
+  // pending description/amount often doesn't match what actually posts.
+  const handleCSVImport = useCallback(async (toInsert, toUpdate = [], deleteIds = []) => {
     setSaving(true)
     try {
       // Ensure any categories/payment methods used in this import exist in their tables
@@ -296,19 +301,23 @@ export default function App() {
       }
       for (const e of toInsert) {
         run(
-          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO expenses VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [e.id, e.date, e.merchant, e.description, e.amount, e.currency,
            e.amount_usd, e.category, e.payment_method, e.receipt_filename,
-           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0, null]
+           e.source, e.notes, e.created_at, e.updated_at, e.type ?? 'Expense', 0, null,
+           e.is_pending ?? 0]
         )
       }
       for (const e of toUpdate) {
         run(
           `UPDATE expenses SET merchant=?, description=?, amount=?, currency=?,
-           amount_usd=?, payment_method=?, source=?, updated_at=? WHERE id=?`,
+           amount_usd=?, payment_method=?, source=?, updated_at=?, is_pending=? WHERE id=?`,
           [e.merchant, e.description, e.amount, e.currency,
-           e.amount_usd, e.payment_method, e.source, e.updated_at, e.id]
+           e.amount_usd, e.payment_method, e.source, e.updated_at, e.is_pending ?? 0, e.id]
         )
+      }
+      for (const id of deleteIds) {
+        run('DELETE FROM expenses WHERE id=?', [id])
       }
       await save()
       // After import, jump to the list filtered to the imported date range

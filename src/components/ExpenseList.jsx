@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft, RefreshCw, Scissors } from 'lucide-react'
+import { Search, Pencil, Trash2, Plus, FileUp, CheckSquare, Square, ChevronLeft, RefreshCw, Scissors, Clock } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { toTitleCase } from '../lib/utils'
 
@@ -391,6 +391,7 @@ function ExpenseRow({ expense: e, selected, isIncome, isTransfer, onToggle, onEd
               </span>
             ) : null}
             {e.is_recurring ? <RefreshCw size={11} className="text-purple-400 shrink-0" title="Recurring" /> : null}
+            {e.is_pending ? <Clock size={11} className="text-yellow-500 shrink-0" title="Pending — not yet posted, description/amount may change" /> : null}
             {e.payment_method && (
               <span className="text-xs text-gray-600">{e.payment_method}</span>
             )}
