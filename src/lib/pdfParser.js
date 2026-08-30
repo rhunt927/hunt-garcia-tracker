@@ -138,6 +138,14 @@ const DISCOVER = {
   // that gets voided and re-authorized for the same amount (a matching -X.XX/+X.XX pair)
   // doesn't import as two separate expenses. See buildDiscoverPendingRows.
   pendingLine: /\bPROCESSING\s*$/i,
+  // Statements from Aug 2026 on added a "MERCHANT CATEGORY" column (see the
+  // "DATE PURCHASES MERCHANT CATEGORY AMOUNT" header) that prints right before the
+  // amount, e.g. "UBERBV UBER TRIP HELP.UB Travel/Entertainment $7.97" — without this,
+  // that label gets captured as part of the merchant name and breaks duplicate matching
+  // against expenses imported from pre-change statements. Only the category values seen
+  // so far are listed; an unrecognized one just won't get stripped (findMatch's
+  // date/amount/payment-method fallback in CSVImport still catches it as a duplicate).
+  merchantCategorySuffix: /\s+(?:Merchandise|Services|Travel\/Entertainment)\s*$/,
 }
 
 const APPLE = {
@@ -560,11 +568,12 @@ function parseTxnLine(line, year, bank, isCredit) {
   const negativeAmount = rawAmount < 0
 
   // Description is everything before the first dollar amount, minus trailing % cashback indicators
-  const description = rest.slice(0, firstMatch.index).trim()
+  let description = rest.slice(0, firstMatch.index).trim()
     .replace(/\s+\d+%\s*$/, '')   // strip trailing "3%" cashback percentage
     .replace(/\s*\$$/, '')        // strip a trailing bare "$" left when the match starts right at the sign
     .replace(/\s+-$/, '')         // strip a trailing "-" left when a negative amount ("-$X.XX") glues its sign on
     .trim()
+  if (bank.merchantCategorySuffix) description = description.replace(bank.merchantCategorySuffix, '').trim()
   if (!description || description.length < 2) return null
 
   // Skip obvious summary/balance lines

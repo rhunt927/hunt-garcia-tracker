@@ -37,11 +37,30 @@ export function CSVImport({
   // existing expense (or undefined). Matched rows get their existing row refreshed
   // on import instead of creating a second, duplicate expense.
   function findMatch(row) {
-    return existingExpenses.find(e =>
+    const exact = existingExpenses.find(e =>
       e.date === row.date &&
       e.amount_usd === row.amount_usd &&
       normalizeMerchant(e.merchant) === normalizeMerchant(row.merchant)
     )
+    if (exact) return exact
+    // Merchant text can drift between statement formats (a bank adding/reordering a
+    // column breaks the parser's merchant extraction) or between parsers for the same
+    // bank (CSV vs. PDF). If exactly one existing expense shares this row's date, amount,
+    // payment method, and credit/debit direction (a refund can coincidentally land on the
+    // same date/amount as an unrelated purchase), it's almost certainly the same
+    // transaction — treat it as a match instead of importing a second copy. Skip the
+    // fallback when more than one existing expense ties on all of that (e.g. two
+    // same-amount rides the same day) rather than guess which one this row refers to.
+    // `row` may not have `type` assigned yet (findMatch runs before that in handleFile),
+    // so direction comes from `isCredit` when present, falling back to `type` otherwise.
+    const rowIsCredit = row.isCredit ?? typeFlags(row.type).isCredit
+    const candidates = existingExpenses.filter(e =>
+      e.date === row.date &&
+      e.amount_usd === row.amount_usd &&
+      e.payment_method === row.payment_method &&
+      typeFlags(e.type).isCredit === rowIsCredit
+    )
+    return candidates.length === 1 ? candidates[0] : undefined
   }
 
   function defaultType(isCredit) {
@@ -178,7 +197,7 @@ export function CSVImport({
       category: expense.category,
       payment_method: expense.payment_method,
       notes: expense.notes,
-      match: findMatch({ date: expense.date, amount_usd: expense.amount_usd, merchant: expense.merchant }),
+      match: findMatch({ date: expense.date, amount_usd: expense.amount_usd, merchant: expense.merchant, payment_method: expense.payment_method, type: expense.type }),
     } : r))
     setEditingRow(null)
   }
