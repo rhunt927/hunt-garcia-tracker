@@ -10,7 +10,7 @@ import { ExpenseForm } from './ExpenseForm'
 export function CSVImport({
   categories, existingExpenses, onImport, onClose,
   paymentMethods, exchangeRates, transactionTypes, accessToken,
-  onAddCategory, onRenameCategory, onDeleteCategory,
+  onAddCategory, onRenameCategory, onDeleteCategory, onAddPaymentMethod,
 }) {
   const inputRef = useRef(null)
   const [bankName, setBankName] = useState(null)
@@ -79,6 +79,18 @@ export function CSVImport({
       const isTxt = name.endsWith('.txt') || file.type === 'text/plain'
       const { rows: parsed, bankName: bank } = isPDF ? await parsePDF(file) : isTxt ? await parseTxt(file) : await parseCSV(file)
       setBankName(bank)
+      // Register any payment method this file introduces right away — otherwise it doesn't
+      // exist in the paymentMethods list until the final Import commit (App.jsx), and a
+      // <select> can't display a value that isn't one of its options: it silently falls
+      // back to showing the first (alphabetically) entry instead, e.g. every Wells Fargo
+      // row's payment method looking like "BOA Checking" while previewing/editing rows.
+      const seenPaymentMethods = new Set(paymentMethods)
+      for (const r of parsed) {
+        if (r.payment_method && !seenPaymentMethods.has(r.payment_method)) {
+          onAddPaymentMethod?.(r.payment_method)
+          seenPaymentMethods.add(r.payment_method)
+        }
+      }
       const categoryMemory = buildCategoryMemory(existingExpenses)
       setRows(parsed.map(r => ({
         ...r,

@@ -430,6 +430,7 @@ export default function App() {
                 accessToken={accessToken}
                 onImport={handleCSVImport}
                 onClose={() => setFormState(null)}
+                onAddPaymentMethod={handleAddPaymentMethod}
                 {...categoryProps}
               />
             ) : formState === 'add' || (formState && typeof formState === 'object') ? (
