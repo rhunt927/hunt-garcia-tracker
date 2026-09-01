@@ -64,7 +64,7 @@ export async function parsePDF(file) {
   }
 
   const bank = detectBank(allLines, rawTextParts.join(' '))
-  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo, Costco Anywhere Visa, Meijer Mastercard.')
+  if (!bank) throw new Error('Unrecognized bank statement PDF. Supported: Apple Card, Schwab, Bank of America, Chase, Discover, Wells Fargo, Costco Anywhere Visa, Meijer Mastercard, Banistmo.')
 
   return parseStatementLines(allLines, bank)
 }
@@ -82,6 +82,7 @@ function detectBank(lines, rawText) {
   if (/wells fargo/i.test(header)) return WELLS_FARGO
   if (/costco anywhere visa/i.test(header)) return CITI_COSTCO
   if (/meijer.*mastercard/i.test(header)) return CITI_MEIJER
+  if (/banistmo/i.test(header)) return BANISTMO
   const full = `${lines.join(' ')} ${rawText ?? ''}`
   if (/apple card/i.test(full)) return APPLE
   if (/schwab/i.test(full)) return SCHWAB
@@ -91,6 +92,7 @@ function detectBank(lines, rawText) {
   if (/wells fargo/i.test(full)) return WELLS_FARGO
   if (/costco anywhere visa/i.test(full)) return CITI_COSTCO
   if (/meijer.*mastercard/i.test(full)) return CITI_MEIJER
+  if (/banistmo/i.test(full)) return BANISTMO
   return null
 }
 
@@ -204,6 +206,27 @@ const CITI_MEIJER = {
   parseLine: parseMeijerLine,
 }
 
+// Banistmo (Panama) checking account statement. One combined "Account movements"
+// table, not split into credit/debit sections — a row carries either a Withdrawal
+// or a Deposit amount (never both), always followed by the running Balance:
+// "31 Aug 2026 DEPOSITO $400.00 $777.09" (deposit — no sign)
+// "25 Aug 2026 <detail...> -$272.91 $377.09" (withdrawal — leading "-" on the amount)
+// Dates are "D Mon YYYY" (day before month name), unlike the "Mon D" format the other
+// month-name banks use, so it needs its own date-start regex for continuation-line
+// detection — the detail column often wraps onto extra lines before the amount appears.
+const DAY_MONTH_NAME_DATE_RE = /^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i
+
+const BANISTMO = {
+  name: 'Banistmo',
+  paymentMethod: 'Banistmo Checking',
+  source: 'pdf_banistmo',
+  dateStartRegex: DAY_MONTH_NAME_DATE_RE,
+  parseLine: parseBanistmoLine,
+  // Unlike other banks, Banistmo wraps overflow detail text onto line(s) *after*
+  // the amount/balance rather than before it — see appendCapsContinuation.
+  trailingContinuation: true,
+}
+
 // ─── Core parser ─────────────────────────────────────────────────────────────
 
 function parseStatementLines(lines, bank) {
@@ -241,7 +264,7 @@ function parseStatementLines(lines, bank) {
     const result = parseWithAmountLookahead(lines, i, year, bank, null)
     if (result) {
       const { row: parsed, consumed } = result
-      parsed.description = followOnLine(lines, i + consumed, bank)
+      if (!bank.parseLine) parsed.description = followOnLine(lines, i + consumed, bank)
       rows.push(parsed)
     }
   }
@@ -384,6 +407,35 @@ function parseMeijerLine(line, year) {
   }
 }
 
+// Banistmo row: "D Mon YYYY <detail...> [-]$AMOUNT $BALANCE" — the leading "-" on
+// the transaction amount (not the balance) marks a withdrawal; its absence, a deposit.
+// There's no section context here, so the sign on the line is the only signal.
+function parseBanistmoLine(line) {
+  const m = line.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\s+(.+?)\s+(-)?\$\s*([\d,]+\.\d{2})\s+\$?\s*[\d,]+\.\d{2}\s*$/i)
+  if (!m) return null
+  const [, dayStr, monStr, yearStr, detail, sign, amtStr] = m
+  const monthNum = MONTH_ABBR[monStr.slice(0, 3).toLowerCase()]
+  if (!monthNum) return null
+  const description = detail.trim()
+  if (!description || description.length < 2) return null
+  const amount = parseFloat(amtStr.replace(/,/g, ''))
+  if (!amount || amount <= 0) return null
+  const mm = String(monthNum).padStart(2, '0')
+  const dd = dayStr.padStart(2, '0')
+  return {
+    date: `${yearStr}-${mm}-${dd}`,
+    merchant: description,
+    description: null,
+    amount,
+    currency: 'USD',
+    amount_usd: amount,
+    category: null,
+    payment_method: 'Banistmo Checking',
+    source: 'pdf_banistmo',
+    isCredit: !sign,
+  }
+}
+
 // A genuine table header's section phrase is followed by more column labels
 // (or nothing) — never a dollar amount right next to it. Account Summary
 // boxes reuse the same section phrases immediately followed by a dollar
@@ -432,6 +484,7 @@ function parseSectionAware(lines, bank, year) {
 const MONTH_NAME_START_RE = /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}/i
 
 function startsWithDate(line, bank) {
+  if (bank.dateStartRegex) return bank.dateStartRegex.test(line)
   if (/^\d{2}\/\d{2}(?:\/\d{2,4})?\b/.test(line)) return true
   return !!(bank.monthNameDates && MONTH_NAME_START_RE.test(line))
 }
@@ -453,11 +506,38 @@ function isContinuationLine(line, bank) {
 // a long ACH/Zelle description pushes the figure off the date's row. Retry the
 // parse by folding in up to 4 following lines when the primary line has a date
 // but no amount was found on it. Returns { row, consumed } or null.
+// Banistmo wraps the tail of a transaction's detail text onto line(s) *after* the
+// amount/balance (unlike other banks, which wrap before the amount) — e.g. "NATURGY
+// PAGO REG" trailing "25 Aug 2026 DB SERVICIO 35 PAGO X app -$272.91 $377.09".
+// Genuine wrapped detail is always upper-case bank shorthand; footer/header text that
+// can immediately follow the last row on a page ("Page 1 of 1", "Telephone Branch...")
+// always has lowercase letters, so that's the signal used to stop.
+const ALL_CAPS_LINE_RE = /^[A-Z0-9][A-Z0-9 .,#/-]*$/
+
+function appendCapsContinuation(lines, i, merchant) {
+  let text = merchant
+  let consumed = 0
+  for (let k = 1; k <= 3; k++) {
+    const next = lines[i + k]?.trim()
+    if (!next || !ALL_CAPS_LINE_RE.test(next)) break
+    text = `${text} ${next}`
+    consumed = k
+  }
+  return { merchant: text, consumed }
+}
+
 function parseWithAmountLookahead(lines, i, year, bank, isCredit) {
   const direct = bank.parseLine
     ? bank.parseLine(lines[i], year, isCredit)
     : parseTxnLine(lines[i], year, bank, isCredit)
-  if (direct) return { row: direct, consumed: 0 }
+  if (direct) {
+    if (bank.trailingContinuation) {
+      const { merchant, consumed } = appendCapsContinuation(lines, i, direct.merchant)
+      direct.merchant = merchant
+      return { row: direct, consumed }
+    }
+    return { row: direct, consumed: 0 }
+  }
   if (!startsWithDate(lines[i], bank)) return null
 
   let merged = lines[i]
